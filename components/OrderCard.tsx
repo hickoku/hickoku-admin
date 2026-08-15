@@ -1,6 +1,6 @@
 "use client";
 
-import { Package, User, CreditCard, Truck, ShoppingBag, ChevronUp, ChevronDown, Ban, Loader2 } from "lucide-react";
+import { Package, User, CreditCard, Truck, ShoppingBag, ChevronUp, ChevronDown, Ban, Loader2, FileText } from "lucide-react";
 
 const SOURCE_LABELS: Record<string, string> = {
   amazon: "Amazon",
@@ -157,8 +157,18 @@ export default function OrderCard({
 
       {isExp && (
         <div style={{ borderTop: "1px solid var(--border)", padding: 18 }} className="animate-in">
-          {onCancel && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 14 }}>
+            <button
+              className="btn-ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open(`/api/invoice?orderId=${encodeURIComponent(ordId)}`, "_blank", "noopener");
+              }}
+              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}
+            >
+              <FileText size={13} /> Invoice
+            </button>
+            {onCancel && (
               <button
                 className="btn-danger"
                 onClick={(e) => {
@@ -171,8 +181,8 @@ export default function OrderCard({
                 {cancelling ? <Loader2 size={13} style={{ animation: "spin 0.6s linear infinite" }} /> : <Ban size={13} />}
                 {cancelling ? "Cancelling..." : "Cancel Order"}
               </button>
-            </div>
-          )}
+            )}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
             <DetailBlock
               title="Order Details"

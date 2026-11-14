@@ -10,7 +10,12 @@ const APP_ENV =
       : "stage";
 
 const nextConfig: NextConfig = {
-  env: { NEXT_PUBLIC_APP_ENV: APP_ENV },
+  env: {
+    NEXT_PUBLIC_APP_ENV: APP_ENV,
+    // Existing product images are paths inside the storefront (e.g.
+    // /hickoku-assets/velvira/Velvira1.JPG); the admin shows them from here.
+    NEXT_PUBLIC_STOREFRONT_URL: process.env.STOREFRONT_URL || "https://www.hickoku.com",
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "*.s3.*.amazonaws.com" },

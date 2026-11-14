@@ -152,7 +152,13 @@ export function OrderDetails({
 
   const totals: Row[] = [];
   if (typeof order.subtotal === "number") totals.push(["Subtotal", fmt(order.subtotal)]);
-  if (order.surpriseDiscount) totals.push(["Discount", `− ${fmt(order.surpriseDiscount)}`]);
+  // Orders placed after offers moved to the admin list each offer used (product offers are
+  // already inside the item prices; cart offers make up surpriseDiscount).
+  const applied: { id: string; name: string; amount: number; level?: string }[] = Array.isArray(order.appliedOffers) ? order.appliedOffers : [];
+  for (const a of applied.filter((x) => x.level !== "cart")) totals.push([`${a.name} (in prices)`, <span key={a.id} style={{ color: "var(--text-muted)" }}>− {fmt(a.amount)}</span>]);
+  const cartOffers = applied.filter((x) => x.level === "cart");
+  if (cartOffers.length) for (const a of cartOffers) totals.push([a.name, `− ${fmt(a.amount)}`]);
+  else if (order.surpriseDiscount) totals.push(["Discount", `− ${fmt(order.surpriseDiscount)}`]);
   if (typeof order.shippingCost === "number") totals.push(["Shipping", fmt(order.shippingCost)]);
   totals.push(["Total", <strong key="t">{fmt(getOrderAmountRupees(order))}</strong>]);
 

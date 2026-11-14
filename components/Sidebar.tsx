@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Package, Users, ImageIcon, LogOut, Plus, Settings } from "lucide-react";
+import { LayoutDashboard, Package, Users, ImageIcon, LogOut, Plus, Settings, Tag, TicketPercent } from "lucide-react";
 
 const NAV = [
   { label: "Home", href: "/", icon: LayoutDashboard },
@@ -10,7 +10,11 @@ const NAV = [
   { label: "Customers", href: "/customers", icon: Users },
 ];
 
-const CONTENT_NAV = [{ label: "Hero banner", href: "/hero", icon: ImageIcon }];
+const CONTENT_NAV = [
+  { label: "Products", href: "/products", icon: Tag },
+  { label: "Offers", href: "/offers", icon: TicketPercent },
+  { label: "Hero banner", href: "/hero", icon: ImageIcon },
+];
 const SETTINGS_NAV = [{ label: "Store details", href: "/settings", icon: Settings }];
 
 // Set in next.config.ts from APP_ENV (see lib/env.ts).

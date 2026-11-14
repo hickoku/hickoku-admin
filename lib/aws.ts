@@ -27,7 +27,16 @@ export const s3Client = new S3Client({
 // Same naming as the storefront (lib/repositories/orderRepository.ts there).
 export const ORDERS_TABLE = IS_PROD ? "orders" : "orders-stage";
 export const SETTINGS_TABLE = IS_PROD ? "site-settings" : "site-settings-stage";
-export const PRODUCTS_TABLE = process.env.PRODUCTS_TABLE_NAME || "products";
+// Products: stage has its own copy (products-stage / product_variants-stage),
+// so catalogue edits on stage never reach the live site. The storefront
+// picks the same tables by APP_ENV.
+export const PRODUCTS_TABLE = IS_PROD ? "products" : "products-stage";
+export const VARIANTS_TABLE = IS_PROD ? "product_variants" : "product_variants-stage";
+// Product create/edit/delete is allowed on stage only. Prod is read-only.
+export const PRODUCT_WRITES_ENABLED = !IS_PROD;
+// Offers & discounts (Offers page). Editable on both envs: on prod this is how live
+// offers are changed. The storefront reads the same table by APP_ENV.
+export const OFFERS_TABLE = IS_PROD ? "offers" : "offers-stage";
 export const S3_BUCKET = process.env.S3_BUCKET_NAME || "";
 export const S3_REGION = process.env.AWS_REGION || "ap-south-1";
 

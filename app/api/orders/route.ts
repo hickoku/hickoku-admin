@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ScanCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { docClient, ORDERS_TABLE, PRODUCTS_TABLE } from "@/lib/aws";
-import { cancelOrder } from "@/lib/orderActions";
+import { cancelOrder, deleteOrders } from "@/lib/orderActions";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -9,21 +9,28 @@ export async function GET(request: Request) {
   const limit = parseInt(searchParams.get("limit") || "200");
 
   try {
-    let ordersResult: any = { Items: [] };
-
-    if (orderId) {
-      ordersResult = await docClient.send(
+    // A single Scan stops after 1 MB, so keep paging until the table is done
+    // (or we have `limit` orders). Without this, older orders and orderId
+    // lookups silently go missing once the table grows past 1 MB.
+    const orders: any[] = [];
+    let startKey: Record<string, any> | undefined;
+    do {
+      const page: any = await docClient.send(
         new ScanCommand({
           TableName: ORDERS_TABLE,
-          FilterExpression: "orderId = :oid OR razorpayOrderId = :oid OR orderNumber = :oid",
-          ExpressionAttributeValues: { ":oid": orderId },
+          ExclusiveStartKey: startKey,
+          ...(orderId
+            ? {
+                FilterExpression: "orderId = :oid OR razorpayOrderId = :oid OR orderNumber = :oid",
+                ExpressionAttributeValues: { ":oid": orderId },
+              }
+            : {}),
         }),
       );
-    } else {
-      ordersResult = await docClient.send(new ScanCommand({ TableName: ORDERS_TABLE, Limit: limit }));
-    }
-
-    const orders = ordersResult.Items || [];
+      orders.push(...(page.Items || []));
+      startKey = page.LastEvaluatedKey;
+    } while (startKey && orders.length < limit);
+    orders.splice(limit);
 
     // Enrich with product data. Most orders already embed the line items
     // they were placed with (order.items — name/price/qty/sku/image, price
@@ -113,5 +120,25 @@ export async function PUT(request: Request) {
       { success: false, error: error.message || "Failed to cancel order" },
       { status: 500 },
     );
+  }
+}
+
+// Bulk delete: body { ids: string[] }. Used by the Orders list's multi-select
+// and the edit page. The UI confirms once (warning about storefront orders
+// and active shipments) before calling this.
+export async function DELETE(request: Request) {
+  try {
+    const { ids } = await request.json();
+    if (!Array.isArray(ids) || !ids.length) {
+      return NextResponse.json({ success: false, error: "No orders selected" }, { status: 400 });
+    }
+    if (ids.length > 200) {
+      return NextResponse.json({ success: false, error: "Delete at most 200 orders at a time" }, { status: 400 });
+    }
+    const result = await deleteOrders(ids);
+    return NextResponse.json({ success: result.failed.length === 0, ...result });
+  } catch (error: any) {
+    console.error("Bulk order delete error:", error);
+    return NextResponse.json({ success: false, error: error.message || "Failed to delete orders" }, { status: 500 });
   }
 }

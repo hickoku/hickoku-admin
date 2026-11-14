@@ -1,9 +1,17 @@
-const DELHIVERY_BASE = process.env.DELHIVERY_BASE_URL || "https://track.delhivery.com";
+import { envFor, requireEnvFor, IS_PROD } from "@/lib/env";
+
+// Stage uses Delhivery's staging server, so test orders never book real
+// pickups. Token: DELHIVERY_API_TOKEN_STAGE/_PROD, URL: DELHIVERY_BASE_URL_STAGE/_PROD.
+export function delhiveryBase() {
+  return envFor("DELHIVERY_BASE_URL") || (IS_PROD ? "https://track.delhivery.com" : requireEnvFor("DELHIVERY_BASE_URL"));
+}
+export function delhiveryToken() {
+  return requireEnvFor("DELHIVERY_API_TOKEN");
+}
 
 export async function delhiveryFetch(path: string) {
-  const token = process.env.DELHIVERY_API_TOKEN;
-  if (!token) throw new Error("DELHIVERY_API_TOKEN not configured");
-  const res = await fetch(`${DELHIVERY_BASE}${path}`, {
+  const token = delhiveryToken();
+  const res = await fetch(`${delhiveryBase()}${path}`, {
     headers: {
       Authorization: `Token ${token}`,
       "Content-Type": "application/json",
@@ -22,10 +30,9 @@ export async function delhiveryFetch(path: string) {
 // / Scheduled — Delhivery rejects it once a package has been delivered or
 // is otherwise past a cancellable state.
 export async function cancelShipment(waybill: string): Promise<{ success: boolean; message: string }> {
-  const token = process.env.DELHIVERY_API_TOKEN;
-  if (!token) throw new Error("DELHIVERY_API_TOKEN not configured");
+  const token = delhiveryToken();
 
-  const res = await fetch(`${DELHIVERY_BASE}/api/p/edit`, {
+  const res = await fetch(`${delhiveryBase()}/api/p/edit`, {
     method: "POST",
     headers: {
       Authorization: `Token ${token}`,

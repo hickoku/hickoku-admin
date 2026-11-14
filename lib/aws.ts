@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { S3Client } from "@aws-sdk/client-s3";
+import { IS_PROD } from "@/lib/env";
 
 function creds() {
   return {
@@ -23,7 +24,9 @@ export const s3Client = new S3Client({
   credentials: creds(),
 });
 
-export const ORDERS_TABLE = process.env.ORDERS_TABLE_NAME || "orders";
+// Same naming as the storefront (lib/repositories/orderRepository.ts there).
+export const ORDERS_TABLE = IS_PROD ? "orders" : "orders-stage";
+export const SETTINGS_TABLE = IS_PROD ? "site-settings" : "site-settings-stage";
 export const PRODUCTS_TABLE = process.env.PRODUCTS_TABLE_NAME || "products";
 export const S3_BUCKET = process.env.S3_BUCKET_NAME || "";
 export const S3_REGION = process.env.AWS_REGION || "ap-south-1";

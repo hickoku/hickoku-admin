@@ -2,22 +2,19 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  LayoutDashboard,
-  Package,
-  Users,
-  ImageIcon,
-  Sparkles,
-  ChevronRight,
-  LogOut,
-} from "lucide-react";
+import { LayoutDashboard, Package, Users, ImageIcon, LogOut, Plus, Settings } from "lucide-react";
 
 const NAV = [
-  { label: "Overview", href: "/", icon: LayoutDashboard },
+  { label: "Home", href: "/", icon: LayoutDashboard },
   { label: "Orders", href: "/orders", icon: Package },
   { label: "Customers", href: "/customers", icon: Users },
-  { label: "Hero Section", href: "/hero", icon: ImageIcon },
 ];
+
+const CONTENT_NAV = [{ label: "Hero banner", href: "/hero", icon: ImageIcon }];
+const SETTINGS_NAV = [{ label: "Store details", href: "/settings", icon: Settings }];
+
+// Set in next.config.ts from APP_ENV (see lib/env.ts).
+const APP_ENV = process.env.NEXT_PUBLIC_APP_ENV === "prod" ? "prod" : "stage";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -29,16 +26,31 @@ export default function Sidebar() {
     router.refresh();
   }
 
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : href === "/orders" ? pathname.startsWith("/orders") && !pathname.startsWith("/orders/create") : pathname.startsWith(href);
+
+  const renderLink = (item: { label: string; href: string; icon: any }) => {
+    const Icon = item.icon;
+    return (
+      <Link key={item.href} href={item.href} className={`sidebar-item ${isActive(item.href) ? "active" : ""}`} style={{ marginBottom: 2 }}>
+        <Icon size={17} strokeWidth={isActive(item.href) ? 2.2 : 1.8} />
+        <span>{item.label}</span>
+      </Link>
+    );
+  };
+
+  const sectionLabel = (text: string) => (
+    <div style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 500, padding: "16px 10px 6px" }}>{text}</div>
+  );
+
   return (
     <aside
       style={{
-        width: 220,
-        minHeight: "100vh",
+        width: 240,
         background: "var(--bg-card)",
         borderRight: "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
-        padding: 0,
         position: "fixed",
         left: 0,
         top: 0,
@@ -46,105 +58,75 @@ export default function Sidebar() {
         zIndex: 100,
       }}
     >
-      {/* Logo */}
-      <div style={{ padding: "20px 16px", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              background: "var(--gradient-gold)",
-              borderRadius: 9,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Sparkles size={16} color="#14120a" />
-          </div>
-          <div>
-            <div style={{ color: "var(--text-primary)", fontWeight: 800, fontSize: 14, letterSpacing: "0.01em" }}>
-              Hickoku
-            </div>
-            <div style={{ color: "var(--text-muted)", fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: "0.08em" }}>
-              ADMIN PANEL
-            </div>
-          </div>
+      <div style={{ padding: "18px 18px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            background: "var(--gradient-gold)",
+            borderRadius: 8,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: 15,
+            boxShadow: "var(--shadow-sm)",
+          }}
+        >
+          H
         </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-0.01em" }}>Hickoku</div>
+          <div style={{ color: "var(--text-muted)", fontSize: 12 }}>Store admin</div>
+        </div>
+        <span
+          className={`badge ${APP_ENV === "prod" ? "badge-success" : "badge-warning"}`}
+          title={APP_ENV === "prod" ? "Live data: orders, site-settings" : "Test data: orders-stage, site-settings-stage"}
+        >
+          {APP_ENV === "prod" ? "Live" : "Stage"}
+        </span>
       </div>
 
-      {/* Nav */}
-      <nav style={{ padding: "12px 8px", flex: 1 }}>
-        <div
-          style={{
-            color: "var(--text-muted)",
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            padding: "4px 12px 8px",
-          }}
+      <nav style={{ padding: "4px 10px", flex: 1, overflowY: "auto" }}>
+        {NAV.map(renderLink)}
+        <Link
+          href="/orders/create"
+          className={`sidebar-item ${pathname.startsWith("/orders/create") ? "active" : ""}`}
+          style={{ marginBottom: 2, paddingLeft: 37, fontSize: 13 }}
         >
-          Navigation
-        </div>
-
-        {NAV.map((item) => {
-          const Icon = item.icon;
-          const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`sidebar-item ${isActive ? "active" : ""}`}
-              style={{ marginBottom: 2 }}
-            >
-              <Icon size={15} />
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {isActive && <ChevronRight size={12} style={{ color: "var(--accent-gold)" }} />}
-            </Link>
-          );
-        })}
+          <Plus size={14} style={{ marginLeft: -21 }} /> Create order
+        </Link>
+        {sectionLabel("Online store")}
+        {CONTENT_NAV.map(renderLink)}
+        {sectionLabel("Settings")}
+        {SETTINGS_NAV.map(renderLink)}
       </nav>
 
-      {/* Services indicator */}
-      <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
+      <div style={{ padding: 12, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
         <div
           style={{
-            color: "var(--text-muted)",
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            marginBottom: 10,
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            background: "var(--bg-hover)",
+            border: "1px solid var(--border)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "var(--text-secondary)",
           }}
         >
-          Connected Services
+          A
         </div>
-        {[
-          { name: "AWS DynamoDB", color: "var(--accent-gold)" },
-          { name: "Razorpay", color: "var(--accent-blue)" },
-          { name: "Delhivery", color: "var(--accent-emerald)" },
-        ].map((s) => (
-          <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <div
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: s.color,
-                boxShadow: `0 0 6px ${s.color}`,
-              }}
-            />
-            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{s.name}</span>
-          </div>
-        ))}
-
-        <button
-          onClick={handleLogout}
-          className="btn-ghost"
-          style={{ width: "100%", marginTop: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-        >
-          <LogOut size={13} /> Log out
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Admin</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>hickoku.com</div>
+        </div>
+        <button onClick={handleLogout} className="btn-ghost btn-sm" title="Log out" aria-label="Log out" style={{ padding: 7 }}>
+          <LogOut size={14} />
         </button>
       </div>
     </aside>

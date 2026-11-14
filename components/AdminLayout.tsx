@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import Sidebar from "./Sidebar";
 
 export default function AdminLayout({
@@ -7,57 +9,42 @@ export default function AdminLayout({
   title,
   subtitle,
   action,
+  back,
+  badges,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
   action?: React.ReactNode;
+  // Optional "back" link shown before the title, e.g. { href: "/orders", label: "Orders" }.
+  back?: { href: string; label: string };
+  // Optional status badges shown next to the title.
+  badges?: React.ReactNode;
 }) {
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <Sidebar />
-      <main style={{ marginLeft: 220, flex: 1, minHeight: "100vh" }}>
-        <div
-          style={{
-            padding: "16px 28px",
-            borderBottom: "1px solid var(--border)",
-            background: "var(--bg-card)",
-            position: "sticky",
-            top: 0,
-            zIndex: 50,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>{title}</h1>
-            {subtitle && (
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, fontFamily: "var(--font-mono)" }}>
-                {subtitle}
-              </p>
-            )}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div
-              style={{
-                padding: "6px 12px",
-                background: "var(--bg-elevated)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                fontSize: 11,
-                fontFamily: "var(--font-mono)",
-                color: "var(--text-muted)",
-              }}
-            >
-              {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+      <main style={{ marginLeft: 240, flex: 1, minWidth: 0, minHeight: "100vh" }}>
+        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 32px 48px" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 24 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 }}>
+              {back && (
+                <Link href={back.href} className="btn-ghost btn-sm" aria-label={`Back to ${back.label}`} title={`Back to ${back.label}`} style={{ padding: 6, marginTop: 1 }}>
+                  <ChevronLeft size={16} />
+                </Link>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.3 }}>{title}</h1>
+                  {badges}
+                </div>
+                {subtitle && <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>{subtitle}</p>}
+              </div>
             </div>
-            {action && <div>{action}</div>}
+            {action && <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>{action}</div>}
           </div>
+          {children}
         </div>
-
-        <div style={{ padding: "24px 28px" }}>{children}</div>
       </main>
     </div>
   );

@@ -28,13 +28,13 @@ function StatCard({ label, value, sub, icon: Icon, accent, href }: any) {
     <div className="stat-card">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <p style={{ color: "var(--text-muted)", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", fontFamily: "var(--font-mono)", marginBottom: 12 }}>
+          <p style={{ color: "var(--text-muted)", fontSize: 13, fontWeight: 500, marginBottom: 10 }}>
             {label}
           </p>
           <p className="stat-number" style={{ color: "var(--text-primary)", marginBottom: 6 }}>{value}</p>
           {sub && <p style={{ color: "var(--text-muted)", fontSize: 12 }}>{sub}</p>}
         </div>
-        <div style={{ width: 40, height: 40, borderRadius: 10, background: `${accent}18`, border: `1px solid ${accent}30`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--bg-hover)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Icon size={18} color={accent} />
         </div>
       </div>
@@ -118,12 +118,12 @@ export default function DashboardPage() {
                       <stop offset="100%" stopColor="#cba135" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#232328" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#605c54" }} tickFormatter={(d) => d.slice(5)} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "#605c54" }} axisLine={false} tickLine={false} width={40} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eaecf0" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#667085" }} tickFormatter={(d) => d.slice(5)} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "#667085" }} axisLine={false} tickLine={false} width={40} />
                   <Tooltip
-                    contentStyle={{ background: "#1a1a1f", border: "1px solid #34343c", borderRadius: 8, fontSize: 12 }}
-                    labelStyle={{ color: "#a5a19a" }}
+                    contentStyle={{ background: "#fff", border: "1px solid #e4e7ec", borderRadius: 8, fontSize: 12, boxShadow: "0 4px 8px -2px rgba(16,24,40,0.08)" }}
+                    labelStyle={{ color: "#475467" }}
                     formatter={(v: any) => [fmt(v), "Revenue"]}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="#cba135" strokeWidth={2} fill="url(#revGrad)" />
@@ -140,7 +140,7 @@ export default function DashboardPage() {
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ background: "#1a1a1f", border: "1px solid #34343c", borderRadius: 8, fontSize: 12 }} />
+                  <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e4e7ec", borderRadius: 8, fontSize: 12, boxShadow: "0 4px 8px -2px rgba(16,24,40,0.08)" }} />
                 </PieChart>
               </ResponsiveContainer>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 4 }}>
@@ -162,10 +162,10 @@ export default function DashboardPage() {
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={stats.topProducts} layout="vertical" margin={{ left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#232328" horizontal={false} />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: "#605c54" }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11, fill: "#a5a19a" }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ background: "#1a1a1f", border: "1px solid #34343c", borderRadius: 8, fontSize: 12 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eaecf0" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: "#667085" }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11, fill: "#475467" }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e4e7ec", borderRadius: 8, fontSize: 12, boxShadow: "0 4px 8px -2px rgba(16,24,40,0.08)" }} />
                     <Bar dataKey="units" fill="#cba135" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

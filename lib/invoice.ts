@@ -1,28 +1,10 @@
-import { ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { ScanCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { docClient, ORDERS_TABLE } from "@/lib/aws";
 import { razorpayFetch } from "@/lib/razorpay";
+import { getStoreSettings, type SellerDetails, type InvoiceSettings, type StoreSettings } from "@/lib/settings";
 
-// Seller identity — the LEGAL entity, deliberately independent of any
-// storefront brand name (e.g. "Hickoku"). Every invoice shows only this.
-export const SELLER = {
-  name: process.env.SELLER_NAME || "",
-  gstin: process.env.SELLER_GSTIN || "",
-  pan: process.env.SELLER_PAN || "",
-  address: process.env.SELLER_ADDRESS || "",
-  city: process.env.SELLER_CITY || "",
-  state: process.env.SELLER_STATE || "",
-  stateCode: process.env.SELLER_STATE_CODE || "",
-  pin: process.env.SELLER_PIN || "",
-  phone: process.env.SELLER_PHONE || "",
-  email: process.env.SELLER_EMAIL || "",
-  website: process.env.SELLER_WEBSITE || "",
-  bank: process.env.SELLER_BANK_NAME || "",
-  accountNo: process.env.SELLER_ACCOUNT_NO || "",
-  ifsc: process.env.SELLER_IFSC || "",
-  terms: process.env.SELLER_TERMS || "All sales are final.",
-};
-
-const INVOICE_PREFIX = process.env.INVOICE_PREFIX || "INV";
+// Seller identity (the legal entity) and invoice layout come from
+// Settings → Store details (lib/settings.ts), falling back to SELLER_* env vars.
 
 export function fmt(n: number): string {
   return new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
@@ -45,6 +27,29 @@ export function toWords(n: number): string {
   return convert(rupees) + " Rupees" + (paise > 0 ? " and " + convert(paise) + " Paise" : "") + " Only";
 }
 
+// GST included in a total, worked out the same way as the storefront's admin
+// order email (app/emails/AdminOrderNotification.tsx): taxable = total / 1.18,
+// GST = total - taxable. Split into CGST + SGST when the buyer is in the
+// seller's state, IGST otherwise; no split if either state is unknown.
+export type GstBreakdown = {
+  rate: number;
+  taxable: number;
+  amount: number;
+  split: "intra" | "inter" | null;
+  half: number;
+};
+
+const normState = (s: string) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
+
+export function computeGst(total: number, rate: number, sellerState: string, buyerState: string): GstBreakdown {
+  const taxable = Number((total / (1 + rate / 100)).toFixed(2));
+  const amount = Number((total - taxable).toFixed(2));
+  const a = normState(sellerState);
+  const b = normState(buyerState);
+  const split = a && b ? (a === b ? "intra" : "inter") : null;
+  return { rate, taxable, amount, split, half: Number((amount / 2).toFixed(2)) };
+}
+
 export type InvoiceItem = { name: string; sku?: string; qty: number; unitPrice: number; total: number };
 
 export type InvoiceData = {
@@ -55,7 +60,9 @@ export type InvoiceData = {
   status: string;
   isCancelled: boolean;
   isTaxInvoice: boolean;
-  seller: typeof SELLER;
+  title: string;
+  seller: SellerDetails;
+  layout: InvoiceSettings;
   buyer: { name: string; email: string; phone: string; address: string; city: string; state: string; pin: string };
   items: InvoiceItem[];
   subtotal: number | null;
@@ -64,23 +71,53 @@ export type InvoiceData = {
   tax: number | null;
   total: number;
   amountInWords: string;
+  gst: GstBreakdown;
+  fees: { handling: number; delivery: number };
   payment: { method: string; status: string; id: string; via: string };
   awb: string | null;
 };
 
-export async function getInvoiceData(orderId: string): Promise<InvoiceData | null> {
-  const res = await docClient.send(
-    new ScanCommand({
-      TableName: ORDERS_TABLE,
-      FilterExpression: "orderId = :oid OR razorpayOrderId = :oid OR orderNumber = :oid",
-      ExpressionAttributeValues: { ":oid": orderId },
-    }),
+// Finds an order by orderId (direct key lookup), else by Razorpay order id or
+// order number (scan, paged so it covers the whole table).
+async function findOrder(orderId: string): Promise<any | null> {
+  const direct = await docClient.send(
+    new GetCommand({ TableName: ORDERS_TABLE, Key: { PK: orderId.startsWith("ORDER#") ? orderId : `ORDER#${orderId}`, SK: "METADATA" } }),
   );
-  const order = res.Items?.[0];
+  if (direct.Item) return direct.Item;
+  let startKey: Record<string, any> | undefined;
+  do {
+    const page: any = await docClient.send(
+      new ScanCommand({
+        TableName: ORDERS_TABLE,
+        FilterExpression: "orderId = :oid OR razorpayOrderId = :oid OR orderNumber = :oid",
+        ExpressionAttributeValues: { ":oid": orderId },
+        ExclusiveStartKey: startKey,
+      }),
+    );
+    if (page.Items?.length) return page.Items[0];
+    startKey = page.LastEvaluatedKey;
+  } while (startKey);
+  return null;
+}
+
+function applySettings(settings: StoreSettings) {
+  const { seller, invoice } = settings;
+  const isTaxInvoice = Boolean(invoice.show.gstin && seller.gstin);
+  return {
+    seller,
+    layout: invoice,
+    isTaxInvoice,
+    title: invoice.title || (isTaxInvoice ? "Tax Invoice" : "Invoice"),
+  };
+}
+
+export async function getInvoiceData(orderId: string): Promise<InvoiceData | null> {
+  const [order, { settings }] = await Promise.all([findOrder(orderId), getStoreSettings()]);
   if (!order) return null;
+  const s = applySettings(settings);
 
   const orderDate = new Date(order.createdAt || order.created_at || Date.now());
-  const invoiceNo = `${INVOICE_PREFIX}-${orderDate.getFullYear()}-${(order.orderNumber || order.orderId || orderId).toString().slice(-8).toUpperCase()}`;
+  const invoiceNo = `${settings.invoice.prefix}-${orderDate.getFullYear()}-${(order.orderNumber || order.orderId || orderId).toString().slice(-8).toUpperCase()}`;
 
   const shipping = order.shippingAddress || {};
   const buyer = {
@@ -119,6 +156,8 @@ export async function getInvoiceData(orderId: string): Promise<InvoiceData | nul
     payment = { method: "", status: order.paymentStatus || "paid", id: "", via: order.source === "amazon" ? "Amazon" : "Manual" };
   }
 
+  const total = typeof order.total === "number" ? order.total : items.reduce((sum, i) => sum + i.total, 0);
+  const inv = settings.invoice;
   return {
     invoiceNo,
     invoiceDate: orderDate.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
@@ -126,17 +165,52 @@ export async function getInvoiceData(orderId: string): Promise<InvoiceData | nul
     orderNumber: order.orderNumber || order.orderId || orderId,
     status: order.status || "",
     isCancelled: order.status === "cancelled",
-    isTaxInvoice: Boolean(SELLER.gstin),
-    seller: SELLER,
+    ...s,
     buyer,
     items,
     subtotal: typeof order.subtotal === "number" ? order.subtotal : null,
     discount: typeof order.surpriseDiscount === "number" ? order.surpriseDiscount : null,
     shipping: typeof order.shippingCost === "number" ? order.shippingCost : null,
     tax: typeof order.tax === "number" ? order.tax : null,
-    total: typeof order.total === "number" ? order.total : items.reduce((s, i) => s + i.total, 0),
-    amountInWords: toWords(typeof order.total === "number" ? order.total : items.reduce((s, i) => s + i.total, 0)),
+    total,
+    amountInWords: toWords(total),
+    gst: computeGst(total, inv.gstRate, settings.seller.state, buyer.state),
+    fees: {
+      handling: inv.handlingFee,
+      delivery: typeof order.shippingCost === "number" && order.shippingCost > 0 ? order.shippingCost : inv.deliveryFee,
+    },
     payment,
     awb: order.awb || null,
+  };
+}
+
+// Sample invoice for the Settings page preview: real settings (saved, or the
+// unsaved form values passed in), made-up order.
+export async function getPreviewInvoice(override?: StoreSettings): Promise<InvoiceData> {
+  const settings = override || (await getStoreSettings()).settings;
+  const items: InvoiceItem[] = [
+    { name: "Velvira Eau de Parfum 50ml", sku: "VEL-50ML-001", qty: 1, unitPrice: 899, total: 899 },
+    { name: "Raafa Attar 6ml", sku: "RAA-6ML-004", qty: 2, unitPrice: 249.5, total: 499 },
+  ];
+  return {
+    invoiceNo: `${settings.invoice.prefix}-${new Date().getFullYear()}-HK123456`,
+    invoiceDate: new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+    orderId: "ORD-PREVIEW",
+    orderNumber: "HK-123456",
+    status: "confirmed",
+    isCancelled: false,
+    ...applySettings(settings),
+    buyer: { name: "Sample Customer", email: "customer@example.com", phone: "9876543210", address: "12 MG Road", city: "Pune", state: "Maharashtra", pin: "411001" },
+    items,
+    subtotal: 1398,
+    discount: 100,
+    shipping: 0,
+    tax: null,
+    total: 1298,
+    amountInWords: toWords(1298),
+    gst: computeGst(1298, settings.invoice.gstRate, settings.seller.state, "Maharashtra"),
+    fees: { handling: settings.invoice.handlingFee, delivery: settings.invoice.deliveryFee },
+    payment: { method: "upi", status: "captured", id: "pay_SAMPLE123", via: "Razorpay" },
+    awb: "1234567890123",
   };
 }

@@ -13,17 +13,52 @@ function addressLine(parts: (string | null | undefined)[]): string {
 }
 
 export function renderInvoiceHTML(inv: InvoiceData): string {
-  const docTitle = inv.isTaxInvoice ? "Tax Invoice" : "Invoice";
-  const sellerAddr = addressLine([inv.seller.address, inv.seller.city, inv.seller.state && inv.seller.pin ? `${inv.seller.state} - ${inv.seller.pin}` : inv.seller.state || inv.seller.pin]);
+  // Each section is shown only if its switch is on in Settings → Store
+  // details AND it has a value.
+  const sh = inv.layout.show;
+  const docTitle = inv.title;
+  const sellerAddr = sh.sellerAddress
+    ? addressLine([inv.seller.address, inv.seller.city, inv.seller.state && inv.seller.pin ? `${inv.seller.state} - ${inv.seller.pin}` : inv.seller.state || inv.seller.pin])
+    : "";
+  const sellerPhone = sh.sellerPhone ? inv.seller.phone : "";
+  const sellerEmail = sh.sellerEmail ? inv.seller.email : "";
+  const sellerWebsite = sh.sellerWebsite ? inv.seller.website : "";
+  const gstin = sh.gstin ? inv.seller.gstin : "";
+  const pan = sh.pan ? inv.seller.pan : "";
+  const buyerPhone = sh.buyerPhone ? inv.buyer.phone : "";
+  const buyerEmail = sh.buyerEmail ? inv.buyer.email : "";
+  const awb = sh.awb ? inv.awb : null;
+  const paid = ["paid", "captured"].includes((inv.payment.status || "").toLowerCase());
+  const statusLabel = inv.isCancelled ? "CANCELLED" : paid ? "PAID" : (inv.payment.status || "UNPAID").toUpperCase();
+  const paymentMethod = [inv.payment.via, inv.payment.method && inv.payment.method.toUpperCase()].filter(Boolean).join(" · ");
   const buyerAddr = addressLine([inv.buyer.address]);
   const buyerCityLine = addressLine([inv.buyer.city, inv.buyer.state, inv.buyer.pin]);
 
-  const knownTotals = [
-    inv.subtotal != null ? ["Subtotal", inv.subtotal] : null,
-    inv.discount ? ["Discount", -inv.discount] : null,
-    inv.shipping ? ["Shipping", inv.shipping] : null,
-    inv.tax != null ? ["Tax", inv.tax] : null,
-  ].filter(Boolean) as [string, number][];
+  // Totals in the same order as the storefront's admin order email:
+  // subtotal, discount, taxable value, GST, waived fees, total charged.
+  type TotalRow = { label: string; value: string; kind?: "sub" | "free" | "discount" };
+  const money = (n: number) => `₹${fmt(n)}`;
+  const g = inv.gst;
+  const totalRows: TotalRow[] = [];
+  if (sh.priceBreakdown && inv.subtotal != null) totalRows.push({ label: "Price (Subtotal)", value: money(inv.subtotal) });
+  if (sh.priceBreakdown && inv.discount) totalRows.push({ label: "Discount", value: `-${money(inv.discount)}`, kind: "discount" });
+  if (sh.gstBreakdown) {
+    totalRows.push({ label: "Taxable value (excl. GST)", value: money(g.taxable) });
+    totalRows.push({ label: `GST (${g.rate}%)`, value: money(g.amount) });
+    if (g.split === "intra" && sh.cgstSgst) {
+      totalRows.push({ label: `CGST ${g.rate / 2}%`, value: money(g.half), kind: "sub" });
+      totalRows.push({ label: `SGST ${g.rate / 2}%`, value: money(Number((g.amount - g.half).toFixed(2))), kind: "sub" });
+    } else if (g.split === "inter" && sh.igst) {
+      totalRows.push({ label: `IGST ${g.rate}%`, value: money(g.amount), kind: "sub" });
+    }
+  } else if (inv.tax) {
+    totalRows.push({ label: "Tax", value: money(inv.tax) });
+  }
+  if (sh.waivedFees) {
+    if (inv.fees.handling) totalRows.push({ label: "Handling fee", value: money(inv.fees.handling), kind: "free" });
+    if (inv.fees.delivery) totalRows.push({ label: "Delivery fee", value: money(inv.fees.delivery), kind: "free" });
+  }
+  const freeHtml = (v: string) => `<s style="color:#9ca3af;margin-right:4px">${v}</s> <strong style="color:#2e9e5b">FREE</strong>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -78,9 +113,11 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
   table.items tbody td.c { text-align: center; }
   .item-name { font-weight: 500; } .item-sku { font-size: 10px; color: #8a8578; margin-top: 2px; }
   .totals-wrap { display: flex; justify-content: flex-end; padding: 12px 40px 0; }
-  .totals { width: 280px; border-collapse: collapse; }
+  .totals { width: 330px; border-collapse: collapse; }
   .totals td { padding: 5px 0; font-size: 12px; color: #55524a; }
   .totals td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .totals tr.sub td { font-size: 11px; color: #8a8578; padding: 1px 0 1px 12px; }
+  .totals tr.disc td { color: #2e9e5b; }
   .totals .grand td { font-size: 16px; font-weight: 800; color: #14120a; border-top: 1px solid #e8e6df; padding-top: 10px; }
   .totals .grand td:last-child { color: #a8801f; }
   .words { margin: 16px 40px 0; padding: 12px 16px; background: #f9f8f5; border: 1px solid #e8e6df; border-radius: 6px; }
@@ -141,9 +178,10 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
           <div class="seller-name">${esc(inv.seller.name)}</div>
           <div class="seller-details">
             ${sellerAddr ? esc(sellerAddr) + "<br/>" : ""}
-            ${inv.seller.phone ? `Phone: ${esc(inv.seller.phone)}<br/>` : ""}
-            ${inv.seller.email ? `Email: ${esc(inv.seller.email)}<br/>` : ""}
-            ${inv.seller.gstin ? `GSTIN: ${esc(inv.seller.gstin)}` : ""}
+            ${sellerPhone ? `Phone: ${esc(sellerPhone)}<br/>` : ""}
+            ${sellerEmail ? `Email: ${esc(sellerEmail)}<br/>` : ""}
+            ${sellerWebsite ? `${esc(sellerWebsite)}<br/>` : ""}
+            ${gstin ? `GSTIN: ${esc(gstin)}` : ""}
           </div>
         </div>
         <div class="doc-label">
@@ -155,15 +193,16 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
       <div class="meta">
         <div class="meta-item"><div class="lbl">Invoice Date</div><div class="val">${esc(inv.invoiceDate)}</div></div>
         <div class="meta-item"><div class="lbl">Order ID</div><div class="val">${esc(inv.orderNumber)}</div></div>
-        <div class="meta-item"><div class="lbl">Status</div><div class="val">${inv.isCancelled ? "CANCELLED" : "PAID"}</div></div>
-        ${inv.awb ? `<div class="meta-item"><div class="lbl">AWB</div><div class="val">${esc(inv.awb)}</div></div>` : ""}
+        <div class="meta-item"><div class="lbl">Status</div><div class="val">${esc(statusLabel)}</div></div>
+        ${awb ? `<div class="meta-item"><div class="lbl">AWB</div><div class="val">${esc(awb)}</div></div>` : ""}
       </div>
 
       <div class="addrs">
         <div class="addr">
           <div class="lbl">Sold By</div>
           <div class="addr-name">${esc(inv.seller.name)}</div>
-          ${inv.seller.pan ? `<div class="addr-line">PAN: ${esc(inv.seller.pan)}</div>` : ""}
+          ${gstin ? `<div class="addr-line">GSTIN: ${esc(gstin)}${inv.seller.stateCode ? ` · State code ${esc(inv.seller.stateCode)}` : ""}</div>` : ""}
+          ${pan ? `<div class="addr-line">PAN: ${esc(pan)}</div>` : ""}
         </div>
         <div class="addr">
           <div class="lbl">Billed To</div>
@@ -171,8 +210,8 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
           <div class="addr-line">
             ${buyerAddr ? esc(buyerAddr) + "<br/>" : ""}
             ${buyerCityLine ? esc(buyerCityLine) : "—"}
-            ${inv.buyer.phone ? `<br/>Phone: ${esc(inv.buyer.phone)}` : ""}
-            ${inv.buyer.email ? `<br/>Email: ${esc(inv.buyer.email)}` : ""}
+            ${buyerPhone ? `<br/>Phone: ${esc(buyerPhone)}` : ""}
+            ${buyerEmail ? `<br/>Email: ${esc(buyerEmail)}` : ""}
           </div>
         </div>
       </div>
@@ -192,7 +231,7 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
               (item, i) => `
           <tr>
             <td class="c">${i + 1}</td>
-            <td><div class="item-name">${esc(item.name)}</div>${item.sku ? `<div class="item-sku">SKU: ${esc(item.sku)}</div>` : ""}</td>
+            <td><div class="item-name">${esc(item.name)}</div>${sh.sku && item.sku ? `<div class="item-sku">SKU: ${esc(item.sku)}</div>` : ""}</td>
             <td class="c">${item.qty}</td>
             <td class="r">₹${fmt(item.unitPrice)}</td>
             <td class="r" style="font-weight:600">₹${fmt(item.total)}</td>
@@ -204,18 +243,38 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
 
       <div class="totals-wrap">
         <table class="totals">
-          ${knownTotals.map(([label, val]) => `<tr><td>${label}</td><td>${val < 0 ? "-" : ""}₹${fmt(Math.abs(val))}</td></tr>`).join("")}
-          <tr class="grand"><td>Total</td><td>₹${fmt(inv.total)}</td></tr>
+          ${totalRows
+            .map((r) =>
+              r.kind === "sub"
+                ? `<tr class="sub"><td>${esc(r.label)}</td><td>${r.value}</td></tr>`
+                : `<tr${r.kind === "discount" ? ' class="disc"' : ""}><td>${esc(r.label)}</td><td>${r.kind === "free" ? freeHtml(r.value) : r.value}</td></tr>`,
+            )
+            .join("")}
+          <tr class="grand"><td>Total ${sh.gstBreakdown ? `<span style="font-size:10px;font-weight:600;color:#8a8578">(incl. GST)</span>` : ""}</td><td>₹${fmt(inv.total)}</td></tr>
         </table>
       </div>
 
-      <div class="words">
+      ${
+        sh.amountInWords
+          ? `<div class="words">
         <div class="lbl">Amount in Words</div>
         <div class="val">₹ ${esc(inv.amountInWords)}</div>
-      </div>
+      </div>`
+          : ""
+      }
 
       ${
-        inv.seller.bank
+        sh.paymentInfo && !inv.isCancelled
+          ? `<div class="pmt">
+        <div><div class="lbl">Payment</div><div class="val">${paid ? `<span class="paid-badge">Paid</span>` : esc(statusLabel)}</div></div>
+        ${paymentMethod ? `<div><div class="lbl">Method</div><div class="val">${esc(paymentMethod)}</div></div>` : ""}
+        ${inv.payment.id ? `<div><div class="lbl">Reference</div><div class="val">${esc(inv.payment.id)}</div></div>` : ""}
+      </div>`
+          : ""
+      }
+
+      ${
+        sh.bankDetails && inv.seller.bank
           ? `<div class="bank">
         <div class="lbl">Bank Details</div>
         <div class="row"><span>Bank: </span>${esc(inv.seller.bank)}</div>
@@ -225,19 +284,26 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
           : ""
       }
 
-      <div class="sig">
+      ${
+        sh.signature
+          ? `<div class="sig">
         <div class="sig-inner">
           <div class="sig-line"></div>
           <div class="sig-name">${esc(inv.seller.name)}</div>
           <div class="sig-title">Authorised Signatory</div>
         </div>
-      </div>
+      </div>`
+          : ""
+      }
 
-      <div class="terms">
-        <div class="lbl">Terms &amp; Conditions</div>
-        <div class="val">${esc(inv.seller.terms)}</div>
-        <div class="val" style="margin-top:4px">This is a computer-generated invoice and does not require a physical signature.</div>
-      </div>
+      ${
+        (sh.terms && inv.layout.terms) || (sh.footerNote && inv.layout.footerNote)
+          ? `<div class="terms">
+        ${sh.terms && inv.layout.terms ? `<div class="lbl">Terms &amp; Conditions</div><div class="val">${esc(inv.layout.terms)}</div>` : ""}
+        ${sh.footerNote && inv.layout.footerNote ? `<div class="val" style="margin-top:4px">${esc(inv.layout.footerNote)}</div>` : ""}
+      </div>`
+          : ""
+      }
 
       <div class="footer">
         <div>${esc(inv.invoiceNo)}</div>
@@ -253,8 +319,8 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
       <div class="center biz-name">${esc(inv.seller.name)}</div>
       <div class="center small">
         ${sellerAddr ? esc(sellerAddr) + "<br/>" : ""}
-        ${inv.seller.phone ? esc(inv.seller.phone) : ""}
-        ${inv.seller.gstin ? `<br/>GSTIN: ${esc(inv.seller.gstin)}` : ""}
+        ${sellerPhone ? esc(sellerPhone) : ""}
+        ${gstin ? `<br/>GSTIN: ${esc(gstin)}` : ""}
       </div>
       <div class="divider"></div>
       <div class="row"><span>Invoice:</span><span>${esc(inv.invoiceNo)}</span></div>
@@ -271,14 +337,19 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
         )
         .join("")}
       <div class="divider"></div>
-      ${knownTotals.map(([label, val]) => `<div class="row"><span>${label}:</span><span>${val < 0 ? "-" : ""}₹${fmt(Math.abs(val))}</span></div>`).join("")}
+      ${totalRows
+        .map(
+          (r) =>
+            `<div class="row"${r.kind === "sub" ? ' style="font-size:10px;padding-left:8px"' : ""}><span>${esc(r.label)}:</span><span>${r.kind === "free" ? `<s>${r.value}</s> FREE` : r.value}</span></div>`,
+        )
+        .join("")}
       <div class="row grand"><span>TOTAL:</span><span>₹${fmt(inv.total)}</span></div>
       <div class="divider"></div>
-      <div class="small"><strong>Bill To:</strong><br/>${esc(inv.buyer.name)}<br/>${buyerAddr ? esc(buyerAddr) + "<br/>" : ""}${esc(buyerCityLine)}${inv.buyer.phone ? `<br/>Ph: ${esc(inv.buyer.phone)}` : ""}</div>
+      <div class="small"><strong>Bill To:</strong><br/>${esc(inv.buyer.name)}<br/>${buyerAddr ? esc(buyerAddr) + "<br/>" : ""}${esc(buyerCityLine)}${buyerPhone ? `<br/>Ph: ${esc(buyerPhone)}` : ""}</div>
       <div class="divider"></div>
-      <div class="small">Payment: ${inv.isCancelled ? "CANCELLED" : `${esc(inv.payment.status || "PAID")} (${esc(inv.payment.via)})`}${inv.awb ? `<br/>AWB: ${esc(inv.awb)}` : ""}</div>
+      <div class="small">Payment: ${inv.isCancelled ? "CANCELLED" : `${esc(statusLabel)}${sh.paymentInfo && paymentMethod ? ` (${esc(paymentMethod)})` : ""}`}${awb ? `<br/>AWB: ${esc(awb)}` : ""}</div>
       <div class="divider"></div>
-      <div class="center small">Thank you for shopping with us!</div>
+      ${inv.layout.thankYouNote ? `<div class="center small">${esc(inv.layout.thankYouNote)}</div>` : ""}
     </div>
   </div>
 

@@ -1,9 +1,11 @@
+import { requireEnvFor } from "@/lib/env";
+
 const RAZORPAY_BASE = "https://api.razorpay.com/v1";
 
+// RAZORPAY_KEY_ID_STAGE/_PROD etc., picked by APP_ENV (see lib/env.ts).
 function authHeader() {
-  const id = process.env.RAZORPAY_KEY_ID;
-  const secret = process.env.RAZORPAY_KEY_SECRET;
-  if (!id || !secret) throw new Error("RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not configured");
+  const id = requireEnvFor("RAZORPAY_KEY_ID");
+  const secret = requireEnvFor("RAZORPAY_KEY_SECRET");
   const credentials = Buffer.from(`${id}:${secret}`).toString("base64");
   return `Basic ${credentials}`;
 }

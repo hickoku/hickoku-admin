@@ -1,8 +1,13 @@
 "use client";
 
-import { Package, User, CreditCard, Truck, ShoppingBag, ChevronUp, ChevronDown, Ban, Loader2, FileText } from "lucide-react";
+import Link from "next/link";
+import { User, CreditCard, Truck, ShoppingBag, Ban, Loader2, FileText, Pencil, Trash2, MapPin } from "lucide-react";
 
-const SOURCE_LABELS: Record<string, string> = {
+// Shared order helpers + the expanded detail panel shown under an order row
+// on the Orders list.
+
+export const SOURCE_LABELS: Record<string, string> = {
+  storefront: "Online store",
   amazon: "Amazon",
   influencer: "Influencer",
   other: "Other",
@@ -14,28 +19,43 @@ export function getSourceBadge(source?: string) {
 }
 
 export function getOrderBadge(status: string) {
-  switch (status?.toLowerCase()) {
+  const s = status?.toLowerCase();
+  switch (s) {
     case "paid":
     case "completed":
-      return <span className="badge badge-success">{status}</span>;
+    case "delivered":
+      return <span className="badge badge-success">{s}</span>;
+    case "confirmed":
+    case "processing":
+    case "shipped":
+      return <span className="badge badge-info">{s}</span>;
     case "pending":
       return <span className="badge badge-warning">Pending</span>;
     case "created":
       return <span className="badge badge-info">Created</span>;
     case "cancelled":
     case "failed":
-      return <span className="badge badge-error">{status}</span>;
+      return <span className="badge badge-error">{s}</span>;
     default:
       return <span className="badge badge-neutral">{status || "—"}</span>;
   }
 }
 
-export function getShipBadge(status?: string) {
-  if (!status) return <span className="badge badge-neutral">No Shipment</span>;
+export function getPaymentBadge(order: any) {
+  const s = (order.paymentStatus || order.razorpay_data?.status || "").toLowerCase();
+  if (s === "paid") return <span className="badge badge-success">Paid</span>;
+  if (s === "pending" || s === "created" || s === "attempted") return <span className="badge badge-warning">Unpaid</span>;
+  if (s === "failed") return <span className="badge badge-error">Payment failed</span>;
+  if (s === "refunded") return <span className="badge badge-neutral">Refunded</span>;
+  return <span className="badge badge-neutral">{s || "—"}</span>;
+}
+
+export function getShipBadge(status?: string, hasAwb?: boolean) {
+  if (!status) return <span className="badge badge-neutral">{hasAwb ? "Booked" : "Unfulfilled"}</span>;
   const s = status.toLowerCase();
   if (s.includes("delivered")) return <span className="badge badge-success">Delivered</span>;
-  if (s.includes("transit") || s.includes("dispatch")) return <span className="badge badge-info">In Transit</span>;
-  if (s.includes("pending") || s.includes("pickup")) return <span className="badge badge-warning">Pending Pickup</span>;
+  if (s.includes("transit") || s.includes("dispatch")) return <span className="badge badge-info">In transit</span>;
+  if (s.includes("pending") || s.includes("pickup") || s.includes("manifest")) return <span className="badge badge-warning">Awaiting pickup</span>;
   if (s.includes("cancel") || s.includes("rto")) return <span className="badge badge-error">Cancelled / RTO</span>;
   return <span className="badge badge-neutral">{status}</span>;
 }
@@ -51,6 +71,16 @@ export function fmtDate(ts: any) {
   return d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Compact date for table rows: "14 Nov, 11:17 am", with the year only when
+// it isn't the current one.
+export function fmtShortDate(ts: any) {
+  if (!ts) return "—";
+  const d = typeof ts === "number" ? new Date(ts * 1000) : new Date(ts);
+  if (isNaN(d.getTime())) return "—";
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleString("en-IN", { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }), hour: "numeric", minute: "2-digit" });
+}
+
 // DynamoDB orders store `total` (and item `price`) as plain rupees (e.g. 898),
 // while Razorpay always reports amounts in paise (e.g. 89800). Prefer the
 // DynamoDB rupee total when present; only fall back to paise-based Razorpay
@@ -61,236 +91,211 @@ export function getOrderAmountRupees(order: any): number {
   return paise / 100;
 }
 
-function DetailBlock({ title, icon, color, rows }: { title: string; icon: React.ReactNode; color: string; rows: [string, any][] }) {
+export function getOrderId(order: any): string {
+  return order.orderId || order.id || order.order_id || order.razorpayOrderId;
+}
+
+export function getCustomerName(order: any): string {
   return (
-    <div className="card-elevated" style={{ padding: 16 }}>
+    (order.customerFirstName ? `${order.customerFirstName} ${order.customerLastName || ""}`.trim() : order.customer_name || order.name) || "—"
+  );
+}
+
+type Row = [string, React.ReactNode];
+
+function Panel({ title, icon, children, action }: { title: string; icon: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <div className="card" style={{ padding: 16, boxShadow: "none" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        {icon}
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>{title}</span>
+        <span style={{ color: "var(--text-muted)", display: "flex" }}>{icon}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{title}</span>
+        {action}
       </div>
-      {rows.map(([k, v]) => (
-        <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
-          <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{k}</span>
-          <span className="mono" style={{ fontSize: 12, maxWidth: 180, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {String(v ?? "—")}
-          </span>
-        </div>
-      ))}
+      {children}
     </div>
   );
 }
 
-export default function OrderCard({
+function Rows({ rows }: { rows: Row[] }) {
+  return (
+    <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 16px", fontSize: 13 }}>
+      {rows.map(([k, v]) => (
+        <div key={k} style={{ display: "contents" }}>
+          <dt style={{ color: "var(--text-muted)" }}>{k}</dt>
+          <dd style={{ textAlign: "right", overflowWrap: "anywhere" }}>{v ?? "—"}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function OrderDetails({
   order,
   ship,
-  isExp,
-  onToggleExpand,
   onCancel,
   cancelling,
+  onDelete,
 }: {
   order: any;
   ship: any;
-  isExp: boolean;
-  onToggleExpand: () => void;
   onCancel?: () => void;
   cancelling?: boolean;
+  onDelete?: () => void;
 }) {
-  const ordId = order.orderId || order.id || order.order_id || order.razorpayOrderId;
-  const custNm =
-    (order.customerFirstName ? `${order.customerFirstName} ${order.customerLastName || ""}`.trim() : order.customer_name || order.name) || "—";
+  const ordId = getOrderId(order);
+  const addr = order.shippingAddress || {};
   const custEm = order.customerEmail || order.email || "";
   const custPhone = order.customerPhone || order.phone || "";
-  const custCity = order.shippingAddress?.city || order.city || "";
-  const custState = order.shippingAddress?.state || order.state || "";
-  const custAddr = order.shippingAddress?.street || order.address || "";
   const rz = order.razorpay_data;
   const payments = rz?.payments?.items || [];
+  const isManual = order.source && order.source !== "storefront";
+
+  const totals: Row[] = [];
+  if (typeof order.subtotal === "number") totals.push(["Subtotal", fmt(order.subtotal)]);
+  if (order.surpriseDiscount) totals.push(["Discount", `− ${fmt(order.surpriseDiscount)}`]);
+  if (typeof order.shippingCost === "number") totals.push(["Shipping", fmt(order.shippingCost)]);
+  totals.push(["Total", <strong key="t">{fmt(getOrderAmountRupees(order))}</strong>]);
+
+  const orderRows: Row[] = [
+    ["Order ID", <span key="i" className="code">{ordId}</span>],
+    ["Channel", SOURCE_LABELS[order.source] || "Online store"],
+    ["Placed", fmtDate(order.createdAt || order.created_at)],
+  ];
+  if (order.updatedAt) orderRows.push(["Updated", fmtDate(order.updatedAt)]);
+
+  const shipRows: Row[] = !ship
+    ? order.awb
+      ? [["AWB", <span key="a" className="code">{order.awb}</span>], ["Tracking", "Not found at Delhivery"]]
+      : [["AWB", "Not booked yet"]]
+    : [
+        ["AWB", <span key="a" className="code">{ship.waybill}</span>],
+        ["Status", ship.status],
+        ["Location", ship.location || "—"],
+        ["Expected", ship.expectedDelivery ? fmtDate(ship.expectedDelivery) : "—"],
+        ["Route", ship.origin || ship.destination ? `${ship.origin || "?"} → ${ship.destination || "?"}` : "—"],
+      ];
 
   return (
-    <div className="card" style={{ overflow: "hidden" }}>
-      <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }} onClick={onToggleExpand}>
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 9,
-            background: "var(--accent-gold-glow)",
-            border: "1px solid rgba(203,161,53,0.25)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-          }}
-        >
-          <Package size={16} color="var(--accent-gold)" />
-        </div>
-
-        <div style={{ minWidth: 0, width: 210, flexShrink: 0 }}>
-          <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--accent-blue)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-            {ordId}
-          </span>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, fontFamily: "var(--font-mono)" }}>
-            {fmtDate(order.createdAt || order.created_at)}
-          </div>
-        </div>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <User size={12} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {custNm}
-            </span>
-          </div>
-          {custEm && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{custEm}</div>}
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <span className="mono" style={{ fontWeight: 700, fontSize: 15 }}>
-            {fmt(getOrderAmountRupees(order))}
-          </span>
-          {getSourceBadge(order.source)}
-          {getOrderBadge(order.status || rz?.status)}
-          {getShipBadge(ship?.status)}
-          {isExp ? <ChevronUp size={14} style={{ color: "var(--text-muted)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-muted)" }} />}
-        </div>
+    <div className="animate-in" style={{ padding: "16px 20px 20px", background: "var(--bg-elevated)" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 14 }}>
+        <button className="btn-ghost btn-sm" onClick={() => window.open(`/api/invoice?orderId=${encodeURIComponent(ordId)}`, "_blank", "noopener")}>
+          <FileText size={14} /> Invoice
+        </button>
+        {order.orderId && (
+          <Link href={`/orders/${encodeURIComponent(order.orderId)}/edit`} className="btn-ghost btn-sm" style={{ textDecoration: "none" }}>
+            <Pencil size={14} /> Edit
+          </Link>
+        )}
+        {onCancel && (
+          <button className="btn-ghost btn-sm" onClick={onCancel} disabled={cancelling}>
+            {cancelling ? <Loader2 size={14} style={{ animation: "spin 0.6s linear infinite" }} /> : <Ban size={14} />}
+            {cancelling ? "Cancelling..." : "Cancel order"}
+          </button>
+        )}
+        {onDelete && (
+          <button className="btn-ghost btn-sm btn-danger-soft" onClick={onDelete}>
+            <Trash2 size={14} /> Delete
+          </button>
+        )}
       </div>
 
-      {isExp && (
-        <div style={{ borderTop: "1px solid var(--border)", padding: 18 }} className="animate-in">
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 14 }}>
-            <button
-              className="btn-ghost"
-              onClick={(e) => {
-                e.stopPropagation();
-                window.open(`/api/invoice?orderId=${encodeURIComponent(ordId)}`, "_blank", "noopener");
-              }}
-              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}
-            >
-              <FileText size={13} /> Invoice
-            </button>
-            {onCancel && (
-              <button
-                className="btn-danger"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCancel();
-                }}
-                disabled={cancelling}
-                style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}
-              >
-                {cancelling ? <Loader2 size={13} style={{ animation: "spin 0.6s linear infinite" }} /> : <Ban size={13} />}
-                {cancelling ? "Cancelling..." : "Cancel Order"}
-              </button>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr)", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <Panel title={`Items (${order.products?.length || 0})`} icon={<ShoppingBag size={15} />}>
+            {!order.products?.length ? (
+              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>No items</p>
+            ) : (
+              <div>
+                {order.products.map((p: any, i: number) => (
+                  <div key={i} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 0", borderTop: i ? "1px solid var(--border)" : "none" }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 6, background: "var(--bg-hover)", border: "1px solid var(--border)", overflow: "hidden", flexShrink: 0, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)" }}>
+                      <ShoppingBag size={16} />
+                      {p.image && /^https?:\/\//.test(p.image) && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.image}
+                          alt=""
+                          onError={(e) => (e.currentTarget.style.display = "none")}
+                          style={{ width: 40, height: 40, objectFit: "cover", position: "absolute", inset: 0, background: "#fff" }}
+                        />
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>{p.name || p.product_name || p.title}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{[p.size, p.sku && `SKU ${p.sku}`].filter(Boolean).join(" · ") || " "}</div>
+                    </div>
+                    <div className="mono" style={{ fontSize: 13, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                      {fmt(p.price ?? 0)} × {p.quantity ?? 1}
+                    </div>
+                    <div className="mono" style={{ fontSize: 13, fontWeight: 600, width: 90, textAlign: "right" }}>
+                      {fmt(p.total ?? (p.price ?? 0) * (p.quantity ?? 1))}
+                    </div>
+                  </div>
+                ))}
+                <div style={{ borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 10 }}>
+                  <Rows rows={totals} />
+                </div>
+              </div>
             )}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
-            <DetailBlock
-              title="Order Details"
-              icon={<Package size={14} color="var(--accent-gold)" />}
-              color="var(--accent-gold)"
-              rows={[
-                ["Order ID", ordId],
-                ["Source", SOURCE_LABELS[order.source] || "Storefront"],
-                ["Razorpay Order ID", order.razorpayOrderId || rz?.id || "—"],
-                ["Status", order.status || rz?.status],
-                ["Total", fmt((order.total || order.total_amount || order.amount || 0) / (order.total ? 1 : 100) || 0)],
-                ["Created", fmtDate(order.createdAt || order.created_at)],
-              ]}
-            />
+          </Panel>
 
-            <DetailBlock
-              title="Customer"
-              icon={<User size={14} color="var(--accent-emerald)" />}
-              color="var(--accent-emerald)"
-              rows={[
-                ["Name", custNm],
-                ["Email", custEm || "—"],
-                ["Phone", custPhone || "—"],
-                ["Address", custAddr || "—"],
-                ["City", custCity || "—"],
-                ["State", custState || "—"],
-              ]}
-            />
-
-            <div className="card-elevated" style={{ padding: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <ShoppingBag size={14} color="var(--accent-rose)" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Products ({order.products?.length || 0})</span>
-              </div>
-              {!order.products || order.products.length === 0 ? (
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No products</p>
-              ) : (
-                order.products.map((p: any, i: number) => (
-                  <div key={i} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 12, fontWeight: 600 }}>
-                        {p.name || p.product_name || p.title}
-                        {p.quantity > 1 && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> × {p.quantity}</span>}
-                      </span>
-                      <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{fmt(p.total ?? p.price ?? p.unit_price ?? 0)}</span>
-                    </div>
-                    {p.sku && <span className="badge badge-neutral" style={{ marginTop: 4 }}>{p.sku}</span>}
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Payment info — Razorpay */}
-            <div className="card-elevated" style={{ padding: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <CreditCard size={14} color="var(--accent-blue)" />
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>Payment (Razorpay)</span>
-              </div>
-              {order.source && order.source !== "storefront" ? (
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  {SOURCE_LABELS[order.source] || order.source} order — paid outside Razorpay ({fmt(getOrderAmountRupees(order))}, marked {order.paymentStatus || "paid"})
-                </p>
-              ) : !rz ? (
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No linked Razorpay order</p>
-              ) : payments.length === 0 ? (
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No payments recorded yet</p>
-              ) : (
-                payments.map((p: any) => (
-                  <div key={p.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span className="mono" style={{ fontSize: 11, color: "var(--accent-blue)" }}>{p.id}</span>
-                      <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{fmt(p.amount / 100)}</span>
-                    </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <span className={`badge ${p.status === "captured" ? "badge-success" : p.status === "failed" ? "badge-error" : "badge-warning"}`}>{p.status}</span>
-                      <span className="badge badge-neutral">{p.method}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Shipment info — Delhivery */}
-            <DetailBlock
-              title="Shipment (Delhivery)"
-              icon={<Truck size={14} color="var(--accent-emerald)" />}
-              color="var(--accent-emerald)"
-              rows={
-                !ship
-                  ? order.awb
-                    ? [
-                        ["AWB (stored)", order.awb],
-                        ["Status", "Not found at Delhivery for this AWB"],
-                      ]
-                    : [["Status", "No AWB on this order yet"]]
-                  : [
-                      ["Waybill", ship.waybill],
-                      ["Status", ship.status],
-                      ["Location", ship.location || "—"],
-                      ["Expected", ship.expectedDelivery || "—"],
-                      ["Origin", ship.origin || "—"],
-                      ["Destination", ship.destination || "—"],
-                    ]
-              }
-            />
-          </div>
+          <Panel title="Payment" icon={<CreditCard size={15} />} action={getPaymentBadge(order)}>
+            {isManual ? (
+              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{SOURCE_LABELS[order.source] || order.source} order, paid outside Razorpay.</p>
+            ) : !rz ? (
+              <Rows rows={[["Razorpay order", order.razorpayOrderId ? <span key="r" className="code">{order.razorpayOrderId}</span> : "Not linked"]]} />
+            ) : payments.length === 0 ? (
+              <Rows rows={[["Razorpay order", <span key="r" className="code">{rz.id}</span>], ["Payments", "None recorded yet"]]} />
+            ) : (
+              payments.map((p: any) => (
+                <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", fontSize: 13 }}>
+                  <span className="code" style={{ flex: 1 }}>{p.id}</span>
+                  <span className="badge badge-neutral" style={{ textTransform: "uppercase" }}>{p.method}</span>
+                  <span className={`badge ${p.status === "captured" ? "badge-success" : p.status === "failed" ? "badge-error" : "badge-warning"}`}>{p.status}</span>
+                  <span className="mono" style={{ fontWeight: 600 }}>{fmt(p.amount / 100)}</span>
+                </div>
+              ))
+            )}
+          </Panel>
         </div>
-      )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <Panel title="Customer" icon={<User size={15} />}>
+            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+              <div style={{ fontWeight: 600 }}>{getCustomerName(order)}</div>
+              {custEm && <div style={{ color: "var(--accent-blue)" }}>{custEm}</div>}
+              {custPhone && <div style={{ color: "var(--text-secondary)" }}>{custPhone}</div>}
+            </div>
+            <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, fontSize: 13, lineHeight: 1.6, color: "var(--text-secondary)" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--text-muted)", fontSize: 12, marginBottom: 2 }}>
+                <MapPin size={12} /> Shipping address
+              </div>
+              {addr.street || order.address ? (
+                <>
+                  <div>{addr.street || order.address}</div>
+                  <div>{[addr.city || order.city, addr.state || order.state, addr.zipCode].filter(Boolean).join(", ")}</div>
+                </>
+              ) : (
+                <div>—</div>
+              )}
+            </div>
+            {order.adminNotes && (
+              <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, fontSize: 13 }}>
+                <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 2 }}>Notes</div>
+                {order.adminNotes}
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Shipment (Delhivery)" icon={<Truck size={15} />} action={getShipBadge(ship?.status, !!order.awb)}>
+            <Rows rows={shipRows} />
+          </Panel>
+
+          <Panel title="Order" icon={<FileText size={15} />}>
+            <Rows rows={orderRows} />
+          </Panel>
+        </div>
+      </div>
     </div>
   );
 }

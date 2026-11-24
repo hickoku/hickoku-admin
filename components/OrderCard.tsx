@@ -10,6 +10,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   storefront: "Online store",
   amazon: "Amazon",
   influencer: "Influencer",
+  club: "Hickoku Club",
   other: "Other",
 };
 

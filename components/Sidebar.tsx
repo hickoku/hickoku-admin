@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Package, Users, ImageIcon, LogOut, Plus, Settings, Tag, TicketPercent, PartyPopper } from "lucide-react";
+import { LayoutDashboard, Package, Users, ImageIcon, LogOut, Plus, Settings, Tag, TicketPercent, PartyPopper, Inbox } from "lucide-react";
 
 const NAV = [
   { label: "Home", href: "/", icon: LayoutDashboard },
@@ -15,10 +15,11 @@ const CONTENT_NAV = [
   { label: "Offers", href: "/offers", icon: TicketPercent },
   { label: "Hero banner", href: "/hero", icon: ImageIcon },
 ];
-const SETTINGS_NAV = [
-  { label: "Store details", href: "/settings", icon: Settings },
+const CLUB_NAV = [
+  { label: "Applications", href: "/club/applications", icon: Inbox },
   { label: "Club settings", href: "/club/settings", icon: PartyPopper },
 ];
+const SETTINGS_NAV = [{ label: "Store details", href: "/settings", icon: Settings }];
 
 // Set in next.config.ts from APP_ENV (see lib/env.ts).
 const APP_ENV = process.env.NEXT_PUBLIC_APP_ENV === "prod" ? "prod" : "stage";
@@ -106,6 +107,8 @@ export default function Sidebar() {
         </Link>
         {sectionLabel("Online store")}
         {CONTENT_NAV.map(renderLink)}
+        {sectionLabel("Hickoku Club")}
+        {CLUB_NAV.map(renderLink)}
         {sectionLabel("Settings")}
         {SETTINGS_NAV.map(renderLink)}
       </nav>

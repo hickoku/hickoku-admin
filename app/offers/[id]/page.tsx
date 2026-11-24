@@ -9,7 +9,7 @@ import type { Offer } from "@/lib/offerEngine";
 
 export default function EditOfferPage() {
   const { id } = useParams<{ id: string }>();
-  const [data, setData] = useState<{ offer: Offer & { updatedAt?: string }; offers: Offer[]; products: OfferProduct[]; env: string; typesLive: boolean } | null>(null);
+  const [data, setData] = useState<{ offer: Offer & { updatedAt?: string }; offers: Offer[]; products: OfferProduct[]; env: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export default function EditOfferPage() {
       .then(([one, all]) => {
         if (!one.success) throw new Error(one.error);
         if (!all.success) throw new Error(all.error);
-        setData({ offer: one.offer, offers: all.offers, products: all.products, env: all.env, typesLive: all.typesLive });
+        setData({ offer: one.offer, offers: all.offers, products: all.products, env: all.env });
       })
       .catch((e) => setError(e.message || "Failed to load offer"));
   }, [id]);
@@ -31,7 +31,7 @@ export default function EditOfferPage() {
     >
       {error && <ErrorState message={error} />}
       {!data && !error && <LoadingState message="Loading offer…" />}
-      {data && o && <OfferForm key={o.id} initial={fromOffer(o)} offerId={o.id} otherOffers={data.offers} products={data.products} isProd={data.env === "prod"} typesLive={data.typesLive} />}
+      {data && o && <OfferForm key={o.id} initial={fromOffer(o)} offerId={o.id} otherOffers={data.offers} products={data.products} isProd={data.env === "prod"} />}
     </AdminLayout>
   );
 }

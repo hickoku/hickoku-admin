@@ -6,7 +6,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import { Card, Switch } from "@/components/FormBits";
 import { priceProduct, priceCart, offerChip, isLive, type Offer, type OfferLevel, type CartLine, type PricingContext } from "@/lib/offerEngine";
-import { OFFER_TYPES, needsStoreUpdate, summaryLines } from "@/lib/offerText";
+import { OFFER_TYPES, summaryLines } from "@/lib/offerText";
 import { AlertCircle, Save, Trash2, Megaphone, Percent, CalendarClock, Calculator, Radio, Shapes, Ticket, Users, Gift, Truck, ListChecks } from "lucide-react";
 
 export type OfferProduct = { id: string; name: string; image: string | null; price: number };
@@ -237,14 +237,12 @@ export default function OfferForm({
   otherOffers,
   products,
   isProd,
-  typesLive,
 }: {
   initial: OfferFormValue;
   offerId?: string;
   otherOffers: Offer[];
   products: OfferProduct[];
   isProd: boolean;
-  typesLive: boolean;
 }) {
   const router = useRouter();
   const { toast, showToast } = useToast();
@@ -272,9 +270,6 @@ export default function OfferForm({
   const chip = offerChip(draft);
   const now = new Date();
   const status = !form.enabled ? "Off" : isLive(draft, now) ? "Live now" : draft.endsAt && new Date(draft.endsAt) <= now ? "Ended" : "Scheduled";
-  // Uses something the storefront can't apply yet → can be saved only while switched off.
-  const waitsForStore = needsStoreUpdate(draft) && !typesLive;
-  const blocked = waitsForStore && form.enabled;
 
   // Preview: this offer as if it were live, together with the other offers that are live now.
   const preview = useMemo(() => {
@@ -419,17 +414,10 @@ export default function OfferForm({
                   ...f,
                   level: v,
                   kind: v === "product" && f.kind === "per_item" ? "percent" : f.kind,
-                  // Types the store can't apply yet start switched off, so the offer can still be saved.
-                  enabled: !typesLive && (v === "bxgy" || v === "gift" || v === "shipping") ? false : f.enabled,
                 }))
               }
               options={OFFER_TYPES}
             />
-            {waitsForStore && (
-              <p style={{ ...hint, marginTop: 10, color: "#b54708" }}>
-                The store applies this kind of offer after the storefront update. Until then you can set it up and save it switched off.
-              </p>
-            )}
           </Card>
 
           <Card title="What customers see" icon={<Megaphone size={17} />}>
@@ -465,7 +453,7 @@ export default function OfferForm({
               <div style={{ display: "grid", gap: 12 }}>
                 <Segmented
                   value={form.method}
-                  onChange={(v) => setForm((f) => ({ ...f, method: v, couponCode: v === "code" && !f.couponCode ? randomCode() : f.couponCode, enabled: !typesLive && v === "code" ? false : f.enabled }))}
+                  onChange={(v) => setForm((f) => ({ ...f, method: v, couponCode: v === "code" && !f.couponCode ? randomCode() : f.couponCode }))}
                   options={[
                     { value: "automatic", label: "Automatic", sub: "Applies by itself when the cart matches" },
                     { value: "code", label: "Discount code", sub: "Customer types a code at checkout" },
@@ -654,13 +642,8 @@ export default function OfferForm({
                 </label>
                 <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Status: {status}</div>
               </div>
-              <Switch id="offer-enabled" checked={form.enabled} disabled={waitsForStore && !form.enabled} onChange={(v) => set("enabled", v)} />
+              <Switch id="offer-enabled" checked={form.enabled} onChange={(v) => set("enabled", v)} />
             </div>
-            {blocked && (
-              <div style={{ fontSize: 12, padding: "10px 12px", borderRadius: 8, background: "#fffaeb", border: "1px solid #fedf89", color: "#b54708" }}>
-                This offer needs the storefront update before it can be switched on. Turn it off to save it for later.
-              </div>
-            )}
             {lvl !== "gift" && lvl !== "shipping" && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div>
@@ -745,10 +728,10 @@ export default function OfferForm({
             <button
               className="btn-primary"
               onClick={() => (isProd ? setConfirmLive(true) : doSave())}
-              disabled={saving || deleting || blocked || (!dirty && !!offerId)}
+              disabled={saving || deleting || (!dirty && !!offerId)}
               style={{ width: "100%", padding: "10px 14px" }}
             >
-              <Save size={15} /> {saving ? "Saving…" : blocked ? "Turn off to save" : offerId ? (dirty ? "Save changes" : "Saved") : "Create offer"}
+              <Save size={15} /> {saving ? "Saving…" : offerId ? (dirty ? "Save changes" : "Saved") : "Create offer"}
             </button>
             {offerId && (
               <button className="btn-ghost btn-danger-soft" onClick={() => setConfirmDelete(true)} disabled={saving || deleting} style={{ width: "100%" }}>

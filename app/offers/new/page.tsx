@@ -7,7 +7,7 @@ import OfferForm, { emptyOffer, type OfferProduct } from "@/components/offers/Of
 import type { Offer } from "@/lib/offerEngine";
 
 export default function NewOfferPage() {
-  const [data, setData] = useState<{ offers: Offer[]; products: OfferProduct[]; env: string; typesLive: boolean } | null>(null);
+  const [data, setData] = useState<{ offers: Offer[]; products: OfferProduct[]; env: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function NewOfferPage() {
     <AdminLayout title="New offer" back={{ href: "/offers", label: "Offers" }}>
       {error && <ErrorState message={error} />}
       {!data && !error && <LoadingState message="Loading…" />}
-      {data && <OfferForm initial={emptyOffer(nextSeq)} otherOffers={data.offers} products={data.products} isProd={data.env === "prod"} typesLive={data.typesLive} />}
+      {data && <OfferForm initial={emptyOffer(nextSeq)} otherOffers={data.offers} products={data.products} isProd={data.env === "prod"} />}
     </AdminLayout>
   );
 }

@@ -9,7 +9,8 @@ import { useToast } from "@/components/Toast";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { Switch } from "@/components/FormBits";
 import { fmtIst, type OfferProduct } from "@/components/offers/OfferForm";
-import { isLive, offerChip, priceCart, priceProduct, type Offer } from "@/lib/offerEngine";
+import { isLive, priceCart, priceProduct, type Offer, type OfferLevel } from "@/lib/offerEngine";
+import { describe, typeLabel } from "@/lib/offerText";
 import { Plus, RefreshCw, TicketPercent, Radio } from "lucide-react";
 
 type Data = { offers: Offer[]; products: OfferProduct[]; env: string; table: string };
@@ -19,17 +20,9 @@ const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { minimumFractionDi
 function statusOf(o: Offer, now: Date) {
   if (!o.enabled) return { label: "Off", cls: "badge-neutral" };
   if (isLive(o, now)) return { label: "Live", cls: "badge-success" };
+  if (o.usageLimit && (o.usedCount || 0) >= o.usageLimit) return { label: "Used up", cls: "badge-neutral" };
   if (o.endsAt && new Date(o.endsAt) <= now) return { label: "Ended", cls: "badge-neutral" };
   return { label: "Scheduled", cls: "badge-info" };
-}
-
-function describe(o: Offer, products: OfferProduct[]) {
-  const chip = offerChip(o);
-  const amount = o.kind === "percent" ? `${chip.big} off` : o.kind === "per_item" ? `${chip.big} off each bottle` : `${chip.big} off`;
-  const where = o.level === "product" ? "product price" : "cart total";
-  const who = o.productIds?.length ? products.filter((p) => o.productIds!.includes(p.id)).map((p) => p.name).join(", ") || `${o.productIds.length} products` : "all products";
-  const cond = [o.minItems ? `${o.minItems}+ bottles` : "", o.minSubtotal ? `cart ≥ ${inr(o.minSubtotal)}` : ""].filter(Boolean).join(", ");
-  return { amount, where, who, cond };
 }
 
 function OffersInner() {
@@ -104,9 +97,10 @@ function OffersInner() {
     return { p, unit, carts, live };
   }, [data, now]);
 
-  const sections: { key: "product" | "cart"; title: string; sub: string }[] = [
-    { key: "product", title: "Product price offers", sub: "Change the price shown on products. Run first, lowest order number first." },
-    { key: "cart", title: "Cart offers", sub: "Taken off the cart total at checkout, after product offers." },
+  const sections: { key: string; levels: OfferLevel[]; title: string; sub: string }[] = [
+    { key: "product", levels: ["product"], title: "Product price offers", sub: "Change the price shown on products. Run first, lowest order number first." },
+    { key: "order", levels: ["bxgy", "cart"], title: "Order offers", sub: "Taken off at checkout, after product offers: Buy X get Y first, then amount off the order." },
+    { key: "extras", levels: ["gift", "shipping"], title: "Free gifts & free delivery", sub: "Added at checkout when the cart qualifies. Always combine with other offers." },
   ];
 
   return (
@@ -137,7 +131,7 @@ function OffersInner() {
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 300px", gap: 16, alignItems: "start" }}>
           <div>
             {sections.map((sec) => {
-              const list = data.offers.filter((o) => o.level === sec.key).sort((a, b) => a.sequence - b.sequence);
+              const list = data.offers.filter((o) => sec.levels.includes(o.level)).sort((a, b) => a.sequence - b.sequence);
               return (
                 <div key={sec.key} className="card" style={{ marginBottom: 16, overflow: "hidden" }}>
                   <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--border)" }}>
@@ -145,7 +139,7 @@ function OffersInner() {
                     <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>{sec.sub}</p>
                   </div>
                   {list.length === 0 ? (
-                    <div style={{ padding: "28px 18px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>No {sec.key} offers yet.</div>
+                    <div style={{ padding: "28px 18px", textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>Nothing here yet.</div>
                   ) : (
                     <table>
                       <thead>
@@ -166,7 +160,11 @@ function OffersInner() {
                             <tr key={o.id} onClick={() => router.push(`/offers/${encodeURIComponent(o.id)}`)} style={{ cursor: "pointer" }}>
                               <td className="mono" style={{ color: "var(--text-muted)" }}>{o.sequence}</td>
                               <td>
-                                <div style={{ fontWeight: 600 }}>{o.name}</div>
+                                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                                  <span style={{ fontWeight: 600 }}>{o.name}</span>
+                                  {o.couponCode && <span className="badge badge-neutral mono">{o.couponCode}</span>}
+                                </div>
+                                {sec.key !== "product" && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{typeLabel(o.level)}</div>}
                                 <div style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 260 }}>{o.title || o.message || "—"}</div>
                               </td>
                               <td>
@@ -175,6 +173,7 @@ function OffersInner() {
                                   {d.who}
                                   {d.cond ? ` · ${d.cond}` : ""}
                                   {!o.combinable ? " · exclusive" : ""}
+                                  {o.usageLimit || o.usedCount ? ` · used ${o.usedCount || 0}${o.usageLimit ? ` / ${o.usageLimit}` : ""}` : ""}
                                 </div>
                               </td>
                               <td style={{ fontSize: 13, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>

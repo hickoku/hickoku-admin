@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import { Card, Switch } from "@/components/FormBits";
-import { priceProduct, priceCart, offerChip, isLive, type Offer } from "@/lib/offerEngine";
-import { AlertCircle, Save, Trash2, Megaphone, Percent, CalendarClock, Calculator, Radio } from "lucide-react";
+import { priceProduct, priceCart, offerChip, isLive, type Offer, type OfferLevel, type CartLine, type PricingContext } from "@/lib/offerEngine";
+import { OFFER_TYPES, summaryLines } from "@/lib/offerText";
+import { AlertCircle, Save, Trash2, Megaphone, Percent, CalendarClock, Calculator, Radio, Shapes, Ticket, Users, Gift, Truck, ListChecks } from "lucide-react";
 
 export type OfferProduct = { id: string; name: string; image: string | null; price: number };
 
@@ -14,13 +15,27 @@ export type OfferFormValue = {
   name: string;
   title: string;
   message: string;
-  level: "product" | "cart";
+  badge: string;
+  level: OfferLevel;
   kind: "percent" | "flat" | "per_item";
   value: string;
+  maxDiscount: string;
   appliesTo: "all" | "selected";
   productIds: string[];
   minItems: string;
   minSubtotal: string;
+  buyQty: string;
+  getQty: string;
+  getAppliesTo: "same" | "selected";
+  getProductIds: string[];
+  getKind: "free" | "percent";
+  getValue: string;
+  giftProductId: string;
+  method: "automatic" | "code";
+  couponCode: string;
+  eligibility: "everyone" | "first_order";
+  usageLimit: string;
+  oncePerCustomer: boolean;
   startsAt: string; // datetime-local, IST
   endsAt: string;
   enabled: boolean;
@@ -40,13 +55,27 @@ export const emptyOffer = (sequence = 1): OfferFormValue => ({
   name: "",
   title: "",
   message: "",
+  badge: "",
   level: "product",
   kind: "percent",
   value: "",
+  maxDiscount: "",
   appliesTo: "all",
   productIds: [],
   minItems: "0",
   minSubtotal: "0",
+  buyQty: "2",
+  getQty: "1",
+  getAppliesTo: "same",
+  getProductIds: [],
+  getKind: "free",
+  getValue: "50",
+  giftProductId: "",
+  method: "automatic",
+  couponCode: "",
+  eligibility: "everyone",
+  usageLimit: "",
+  oncePerCustomer: false,
   startsAt: "",
   endsAt: "",
   enabled: true,
@@ -55,17 +84,33 @@ export const emptyOffer = (sequence = 1): OfferFormValue => ({
 });
 
 export function fromOffer(o: Offer): OfferFormValue {
+  const e = emptyOffer(o.sequence);
   return {
+    ...e,
     name: o.name,
     title: o.title || "",
     message: o.message || "",
+    badge: o.badge || "",
     level: o.level,
     kind: o.kind,
-    value: String(o.value),
+    value: o.value ? String(o.value) : "",
+    maxDiscount: o.maxDiscount ? String(o.maxDiscount) : "",
     appliesTo: o.productIds?.length ? "selected" : "all",
     productIds: o.productIds || [],
     minItems: String(o.minItems || 0),
     minSubtotal: String(o.minSubtotal || 0),
+    buyQty: o.buyQty ? String(o.buyQty) : e.buyQty,
+    getQty: o.getQty ? String(o.getQty) : e.getQty,
+    getAppliesTo: o.getProductIds?.length ? "selected" : "same",
+    getProductIds: o.getProductIds || [],
+    getKind: o.getKind === "percent" ? "percent" : "free",
+    getValue: o.getValue ? String(o.getValue) : e.getValue,
+    giftProductId: o.giftProductId || "",
+    method: o.couponCode ? "code" : "automatic",
+    couponCode: o.couponCode || "",
+    eligibility: o.eligibility === "first_order" ? "first_order" : "everyone",
+    usageLimit: o.usageLimit ? String(o.usageLimit) : "",
+    oncePerCustomer: !!o.oncePerCustomer,
     startsAt: toIstInput(o.startsAt),
     endsAt: toIstInput(o.endsAt),
     enabled: o.enabled,
@@ -75,33 +120,47 @@ export function fromOffer(o: Offer): OfferFormValue {
 }
 
 function toOffer(f: OfferFormValue, id: string): Offer {
+  const order = f.level !== "product";
+  const usesProducts = f.level === "product" || f.level === "cart" || f.level === "bxgy";
   return {
     id,
     name: f.name || "This offer",
     title: f.title,
     message: f.message,
+    badge: f.badge,
     level: f.level,
     kind: f.kind,
-    value: Number(f.value) || 0,
-    productIds: f.appliesTo === "selected" ? f.productIds : [],
-    minItems: f.level === "cart" ? Number(f.minItems) || 0 : 0,
-    minSubtotal: f.level === "cart" ? Number(f.minSubtotal) || 0 : 0,
+    value: f.level === "product" || f.level === "cart" ? Number(f.value) || 0 : 0,
+    maxDiscount: f.level === "cart" && f.kind === "percent" ? Number(f.maxDiscount) || 0 : 0,
+    productIds: usesProducts && f.appliesTo === "selected" ? f.productIds : [],
+    minItems: order ? Number(f.minItems) || 0 : 0,
+    minSubtotal: order ? Number(f.minSubtotal) || 0 : 0,
+    buyQty: Number(f.buyQty) || 0,
+    getQty: Number(f.getQty) || 0,
+    getProductIds: f.level === "bxgy" && f.getAppliesTo === "selected" ? f.getProductIds : [],
+    getKind: f.getKind,
+    getValue: Number(f.getValue) || 0,
+    giftProductId: f.level === "gift" ? f.giftProductId || null : null,
+    eligibility: order ? f.eligibility : "everyone",
+    usageLimit: order ? Number(f.usageLimit) || 0 : 0,
+    oncePerCustomer: order && f.oncePerCustomer,
     startsAt: fromIstInput(f.startsAt),
     endsAt: fromIstInput(f.endsAt),
     enabled: f.enabled,
     sequence: Number(f.sequence) || 0,
-    combinable: f.combinable,
-    couponCode: null,
+    combinable: f.level === "gift" || f.level === "shipping" ? true : f.combinable,
+    couponCode: order && f.method === "code" ? f.couponCode.trim().toUpperCase() || "CODE" : null,
   };
 }
 
 const label = { display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 6 } as const;
 const hint = { fontSize: 12, color: "var(--text-muted)", marginTop: 4 } as const;
 const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+const imgSrc = (p: OfferProduct) => (p.image?.startsWith("/") ? `${process.env.NEXT_PUBLIC_STOREFRONT_URL}${p.image}` : p.image || "");
 
-function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: string; sub?: string; disabled?: boolean }[] }) {
+function Segmented<T extends string>({ value, onChange, options, cols }: { value: T; onChange: (v: T) => void; options: { value: T; label: string; sub?: string; disabled?: boolean }[]; cols?: number }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${options.length}, 1fr)`, gap: 8 }}>
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols || options.length}, minmax(0, 1fr))`, gap: 8 }}>
       {options.map((o) => {
         const on = value === o.value;
         return (
@@ -130,6 +189,47 @@ function Segmented<T extends string>({ value, onChange, options }: { value: T; o
     </div>
   );
 }
+
+// Checkbox grid (multi) or radio grid (single) of products.
+function ProductPicker({ products, selected, onChange, single }: { products: OfferProduct[]; selected: string[]; onChange: (ids: string[]) => void; single?: boolean }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 8 }}>
+      {products.map((p) => {
+        const on = selected.includes(p.id);
+        return (
+          <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: 8, border: `1.5px solid ${on ? "var(--text-primary)" : "var(--border)"}`, borderRadius: 10, cursor: "pointer", fontSize: 13 }}>
+            <input
+              type={single ? "radio" : "checkbox"}
+              checked={on}
+              onChange={() => onChange(single ? [p.id] : on ? selected.filter((x) => x !== p.id) : [...selected, p.id])}
+            />
+            {p.image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imgSrc(p)} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />
+            )}
+            <span style={{ fontWeight: 500 }}>{p.name}</span>
+            {single && <span style={{ marginLeft: "auto", color: "var(--text-muted)", fontSize: 12 }}>{inr(p.price)}</span>}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+function Radios<T extends string>({ name, value, onChange, options }: { name: string; value: T; onChange: (v: T) => void; options: { value: T; label: string }[] }) {
+  return (
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 14 }}>
+      {options.map((o) => (
+        <label key={o.value} style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
+          <input type="radio" name={name} checked={value === o.value} onChange={() => onChange(o.value)} />
+          {o.label}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+const randomCode = () => Array.from({ length: 8 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
 
 export default function OfferForm({
   initial,
@@ -163,6 +263,8 @@ export default function OfferForm({
   }, [dirty]);
 
   const set = <K extends keyof OfferFormValue>(k: K, v: OfferFormValue[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const lvl = form.level;
+  const isOrder = lvl !== "product";
 
   const draft = useMemo(() => toOffer(form, offerId || "__draft__"), [form, offerId]);
   const chip = offerChip(draft);
@@ -171,30 +273,40 @@ export default function OfferForm({
 
   // Preview: this offer as if it were live, together with the other offers that are live now.
   const preview = useMemo(() => {
-    const asLive: Offer = { ...draft, enabled: true, startsAt: null, endsAt: null };
+    const asLive: Offer = { ...draft, enabled: true, startsAt: null, endsAt: null, usedCount: 0 };
     const others = otherOffers.filter((o) => o.id !== offerId && isLive(o));
     const all = [...others, asLive];
-    const sample = (draft.productIds?.length ? products.find((p) => draft.productIds!.includes(p.id)) : products[0]) || { id: "sample", name: "Sample product", price: 499, image: null };
+    const ctx: PricingContext = { codes: draft.couponCode ? [draft.couponCode] : [], firstOrder: true };
+    const pool = draft.productIds?.length ? products.filter((p) => draft.productIds!.includes(p.id)) : products;
+    const sample = pool[0] || products[0] || { id: "sample", name: "Sample product", price: 499, image: null };
     const without = priceProduct(sample.price, sample.id, others);
     const withIt = priceProduct(sample.price, sample.id, all);
-    const carts = [1, 2, 3].map((qty) => {
-      const a = priceCart([{ productId: sample.id, price: without.price, quantity: qty }], others);
-      const b = priceCart([{ productId: sample.id, price: withIt.price, quantity: qty }], all);
-      return { qty, before: a.total, after: b.total, applied: b.applied };
+    // Test carts: different bottles from the pool, so "cheapest is free" shows clearly.
+    const sizes = lvl === "bxgy" ? [draft.buyQty || 1, (draft.buyQty || 1) + (draft.getQty || 1), (draft.buyQty || 1) + (draft.getQty || 1) + 1] : [1, 2, 3];
+    const list = pool.length ? pool : [sample];
+    const carts = [...new Set(sizes.map((n) => Math.min(10, n)))].map((qty) => {
+      const picked = Array.from({ length: qty }, (_, i) => list[i % list.length]);
+      const lines = (withOffer: boolean): CartLine[] =>
+        picked.map((p) => ({ productId: p.id, price: priceProduct(p.price, p.id, withOffer ? all : others).price, quantity: 1 }));
+      const a = priceCart(lines(false), others, now, ctx);
+      const b = priceCart(lines(true), all, now, ctx);
+      const mine = b.applied.find((x) => x.id === asLive.id);
+      const gift = b.gifts.find((g) => g.offerId === asLive.id);
+      const ship = b.freeShipping?.offerId === asLive.id;
+      return { qty, names: picked.map((p) => p.name), before: a.total, after: b.total, mine, gift, ship };
     });
     return { sample, without, withIt, carts, othersLive: others };
-  }, [draft, otherOffers, offerId, products]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, otherOffers, offerId, products, lvl]);
+
+  const giftName = products.find((p) => p.id === form.giftProductId)?.name;
 
   async function doSave() {
     setSaving(true);
     setError(null);
     setConfirmLive(false);
     try {
-      const body = {
-        ...form,
-        startsAt: fromIstInput(form.startsAt),
-        endsAt: fromIstInput(form.endsAt),
-      };
+      const body = { ...form, startsAt: fromIstInput(form.startsAt), endsAt: fromIstInput(form.endsAt) };
       const res = await fetch(offerId ? `/api/offers/${encodeURIComponent(offerId)}` : "/api/offers", {
         method: offerId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -230,11 +342,50 @@ export default function OfferForm({
     }
   }
 
-  const text = (k: "name" | "title" | "message", placeholder: string, max: number) => (
+  const text = (k: "name" | "title" | "message" | "badge", placeholder: string, max: number) => (
     <input className="input-field" value={form[k]} maxLength={max} placeholder={placeholder} onChange={(e) => set(k, e.target.value)} style={{ width: "100%" }} />
   );
+  const num = (k: keyof OfferFormValue, opts: { unit?: string; step?: number; min?: number; max?: number; placeholder?: string; width?: number | string } = {}) => (
+    <div style={{ position: "relative", width: opts.width || "100%" }}>
+      {opts.unit && <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>{opts.unit}</span>}
+      <input
+        className="input-field"
+        type="number"
+        min={opts.min ?? 0}
+        max={opts.max}
+        step={opts.step ?? 1}
+        placeholder={opts.placeholder}
+        value={form[k] as string}
+        onChange={(e) => set(k, e.target.value as never)}
+        style={{ width: "100%", paddingLeft: opts.unit ? 30 : undefined }}
+      />
+    </div>
+  );
 
-  const valueUnit = form.kind === "percent" ? "%" : "₹";
+  const conditions = (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div>
+        <label style={label}>Minimum bottles in cart</label>
+        {num("minItems")}
+        <p style={hint}>0 = no minimum. The cart shows an &quot;add N more&quot; nudge.</p>
+      </div>
+      <div>
+        <label style={label}>Minimum cart value</label>
+        {num("minSubtotal", { unit: "₹" })}
+        <p style={hint}>Counted after product discounts. 0 = no minimum.</p>
+      </div>
+    </div>
+  );
+
+  const productScope = (title: string) => (
+    <div>
+      <label style={label}>{title}</label>
+      <div style={{ marginBottom: 8 }}>
+        <Radios name="appliesTo" value={form.appliesTo} onChange={(v) => set("appliesTo", v)} options={[{ value: "all", label: "All products" }, { value: "selected", label: "Only selected products" }]} />
+      </div>
+      {form.appliesTo === "selected" && <ProductPicker products={products} selected={form.productIds} onChange={(v) => set("productIds", v)} />}
+    </div>
+  );
 
   return (
     <>
@@ -254,6 +405,21 @@ export default function OfferForm({
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 16, alignItems: "start" }}>
         <div>
+          <Card title="Offer type" icon={<Shapes size={17} />}>
+            <Segmented
+              cols={3}
+              value={lvl}
+              onChange={(v) =>
+                setForm((f) => ({
+                  ...f,
+                  level: v,
+                  kind: v === "product" && f.kind === "per_item" ? "percent" : f.kind,
+                }))
+              }
+              options={OFFER_TYPES}
+            />
+          </Card>
+
           <Card title="What customers see" icon={<Megaphone size={17} />}>
             <div style={{ display: "grid", gap: 14 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 12 }}>
@@ -268,94 +434,184 @@ export default function OfferForm({
                   <p style={hint}>Shown on offer banners and the product page.</p>
                 </div>
               </div>
-              <div>
-                <label style={label}>Description</label>
-                {text("message", "e.g. Get an extra ₹25 off per bottle when you buy 2 or more.", 200)}
+              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={label}>Description</label>
+                  {text("message", lvl === "bxgy" ? "e.g. Add any 3 attars, the cheapest one is free." : "e.g. Get an extra ₹25 off per bottle when you buy 2 or more.", 200)}
+                </div>
+                <div>
+                  <label style={label}>Badge on product cards</label>
+                  {text("badge", lvl === "bxgy" ? "e.g. BUY 2 GET 1" : "e.g. 15% OFF", 24)}
+                  <p style={hint}>Empty = no badge.</p>
+                </div>
               </div>
             </div>
           </Card>
 
-          <Card title="Discount" icon={<Percent size={17} />}>
-            <div style={{ display: "grid", gap: 16 }}>
-              <div>
-                <label style={label}>Applies to</label>
+          {isOrder && (
+            <Card title="How customers get it" icon={<Ticket size={17} />}>
+              <div style={{ display: "grid", gap: 12 }}>
                 <Segmented
-                  value={form.level}
-                  onChange={(v) => setForm((f) => ({ ...f, level: v, kind: v === "product" && f.kind === "per_item" ? "percent" : f.kind }))}
+                  value={form.method}
+                  onChange={(v) => setForm((f) => ({ ...f, method: v, couponCode: v === "code" && !f.couponCode ? randomCode() : f.couponCode }))}
                   options={[
-                    { value: "product", label: "Product price", sub: "Lowers the price shown on products" },
-                    { value: "cart", label: "Cart total", sub: "Taken off at checkout, can need conditions" },
+                    { value: "automatic", label: "Automatic", sub: "Applies by itself when the cart matches" },
+                    { value: "code", label: "Discount code", sub: "Customer types a code at checkout" },
                   ]}
                 />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 12, alignItems: "end" }}>
-                <div>
-                  <label style={label}>Type</label>
-                  <Segmented
-                    value={form.kind}
-                    onChange={(v) => set("kind", v)}
-                    options={[
-                      { value: "percent", label: "Percentage" },
-                      { value: "flat", label: "Fixed amount" },
-                      { value: "per_item", label: "Per bottle", disabled: form.level !== "cart" },
-                    ]}
-                  />
-                </div>
-                <div>
-                  <label style={label}>{form.kind === "percent" ? "Percent off *" : form.kind === "per_item" ? "₹ off each bottle *" : "₹ off *"}</label>
-                  <div style={{ position: "relative" }}>
-                    <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 14 }}>{valueUnit}</span>
-                    <input className="input-field" type="number" min={0} step={form.kind === "percent" ? 1 : 0.5} value={form.value} onChange={(e) => set("value", e.target.value)} style={{ width: "100%", paddingLeft: 30 }} />
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label style={label}>Products</label>
-                <div style={{ display: "flex", gap: 16, fontSize: 14, marginBottom: 8 }}>
-                  {(["all", "selected"] as const).map((v) => (
-                    <label key={v} style={{ display: "flex", gap: 6, alignItems: "center", cursor: "pointer" }}>
-                      <input type="radio" name="appliesTo" checked={form.appliesTo === v} onChange={() => set("appliesTo", v)} />
-                      {v === "all" ? "All products" : "Only selected products"}
-                    </label>
-                  ))}
-                </div>
-                {form.appliesTo === "selected" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 8 }}>
-                    {products.map((p) => {
-                      const on = form.productIds.includes(p.id);
-                      return (
-                        <label
-                          key={p.id}
-                          style={{ display: "flex", gap: 8, alignItems: "center", padding: 8, border: `1.5px solid ${on ? "var(--text-primary)" : "var(--border)"}`, borderRadius: 10, cursor: "pointer", fontSize: 13 }}
-                        >
-                          <input type="checkbox" checked={on} onChange={() => set("productIds", on ? form.productIds.filter((x) => x !== p.id) : [...form.productIds, p.id])} />
-                          {p.image && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.image.startsWith("/") ? `${process.env.NEXT_PUBLIC_STOREFRONT_URL}${p.image}` : p.image} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: "cover" }} />
-                          )}
-                          <span style={{ fontWeight: 500 }}>{p.name}</span>
-                        </label>
-                      );
-                    })}
+                {form.method === "code" && (
+                  <div>
+                    <label style={label}>Code *</label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        className="input-field mono"
+                        value={form.couponCode}
+                        maxLength={20}
+                        placeholder="e.g. DIWALI15"
+                        onChange={(e) => set("couponCode", e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                        style={{ flex: 1, letterSpacing: "0.06em" }}
+                      />
+                      <button type="button" className="btn-ghost" onClick={() => set("couponCode", randomCode())}>
+                        Generate
+                      </button>
+                    </div>
+                    <p style={hint}>3–20 letters or numbers. Customers can type it in any case.</p>
                   </div>
                 )}
               </div>
-              {form.level === "cart" && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            </Card>
+          )}
+
+          {(lvl === "product" || lvl === "cart") && (
+            <Card title="Discount" icon={<Percent size={17} />}>
+              <div style={{ display: "grid", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 12, alignItems: "end" }}>
                   <div>
-                    <label style={label}>Minimum bottles in cart</label>
-                    <input className="input-field" type="number" min={0} step={1} value={form.minItems} onChange={(e) => set("minItems", e.target.value)} style={{ width: "100%" }} />
-                    <p style={hint}>0 = no minimum. The cart shows an &quot;add N more&quot; nudge.</p>
+                    <label style={label}>Type</label>
+                    <Segmented
+                      value={form.kind}
+                      onChange={(v) => set("kind", v)}
+                      options={[
+                        { value: "percent", label: "Percentage" },
+                        { value: "flat", label: "Fixed amount" },
+                        { value: "per_item", label: "Per bottle", disabled: lvl !== "cart" },
+                      ]}
+                    />
                   </div>
                   <div>
-                    <label style={label}>Minimum cart value (₹)</label>
-                    <input className="input-field" type="number" min={0} step={1} value={form.minSubtotal} onChange={(e) => set("minSubtotal", e.target.value)} style={{ width: "100%" }} />
-                    <p style={hint}>Counted after product discounts. 0 = no minimum.</p>
+                    <label style={label}>{form.kind === "percent" ? "Percent off *" : form.kind === "per_item" ? "₹ off each bottle *" : "₹ off *"}</label>
+                    {num("value", { unit: form.kind === "percent" ? "%" : "₹", step: form.kind === "percent" ? 1 : 0.5 })}
                   </div>
                 </div>
-              )}
-            </div>
-          </Card>
+                {lvl === "cart" && form.kind === "percent" && (
+                  <div style={{ maxWidth: 240 }}>
+                    <label style={label}>Maximum discount</label>
+                    {num("maxDiscount", { unit: "₹", placeholder: "No cap" })}
+                    <p style={hint}>Most this offer can take off one order. Empty = no cap.</p>
+                  </div>
+                )}
+                {productScope("Products")}
+                {lvl === "cart" && conditions}
+              </div>
+            </Card>
+          )}
+
+          {lvl === "bxgy" && (
+            <>
+              <Card title="Customer buys" icon={<ListChecks size={17} />}>
+                <div style={{ display: "grid", gap: 16 }}>
+                  <div style={{ maxWidth: 200 }}>
+                    <label style={label}>Bottles to buy *</label>
+                    {num("buyQty", { min: 1, max: 20 })}
+                  </div>
+                  {productScope("From")}
+                </div>
+              </Card>
+              <Card title="Customer gets" icon={<Gift size={17} />}>
+                <div style={{ display: "grid", gap: 16 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 12, alignItems: "end" }}>
+                    <div>
+                      <label style={label}>Bottles they get *</label>
+                      {num("getQty", { min: 1, max: 20 })}
+                    </div>
+                    <div>
+                      <label style={label}>At</label>
+                      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                        <Radios name="getKind" value={form.getKind} onChange={(v) => set("getKind", v)} options={[{ value: "free", label: "Free" }, { value: "percent", label: "Percentage off" }]} />
+                        {form.getKind === "percent" && num("getValue", { unit: "%", min: 1, max: 99, width: 110 })}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={label}>Which bottles</label>
+                    <div style={{ marginBottom: 8 }}>
+                      <Radios
+                        name="getAppliesTo"
+                        value={form.getAppliesTo}
+                        onChange={(v) => set("getAppliesTo", v)}
+                        options={[{ value: "same", label: "The cheapest of the bottles above" }, { value: "selected", label: "Only selected products" }]}
+                      />
+                    </div>
+                    {form.getAppliesTo === "selected" && <ProductPicker products={products} selected={form.getProductIds} onChange={(v) => set("getProductIds", v)} />}
+                    <p style={hint}>The cheapest qualifying bottles are always the free ones, so nobody gets the most expensive bottle free.</p>
+                  </div>
+                  {conditions}
+                </div>
+              </Card>
+            </>
+          )}
+
+          {lvl === "gift" && (
+            <Card title="Free gift" icon={<Gift size={17} />}>
+              <div style={{ display: "grid", gap: 16 }}>
+                <div>
+                  <label style={label}>Gift product *</label>
+                  <ProductPicker single products={products} selected={form.giftProductId ? [form.giftProductId] : []} onChange={(v) => set("giftProductId", v[0] || "")} />
+                  <p style={hint}>One bottle is added to the order at ₹0.</p>
+                </div>
+                {conditions}
+              </div>
+            </Card>
+          )}
+
+          {lvl === "shipping" && (
+            <Card title="Free delivery" icon={<Truck size={17} />}>
+              <div style={{ display: "grid", gap: 12 }}>
+                {conditions}
+                <p style={hint}>Only makes a difference when the store charges for delivery (Settings → Checkout).</p>
+              </div>
+            </Card>
+          )}
+
+          {isOrder && (
+            <Card title="Who can use it" icon={<Users size={17} />}>
+              <div style={{ display: "grid", gap: 14 }}>
+                <Radios
+                  name="eligibility"
+                  value={form.eligibility}
+                  onChange={(v) => set("eligibility", v)}
+                  options={[
+                    { value: "everyone", label: "Everyone" },
+                    { value: "first_order", label: "First order only" },
+                  ]}
+                />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
+                  <div>
+                    <label style={label}>Total uses</label>
+                    {num("usageLimit", { placeholder: "No limit" })}
+                    <p style={hint}>Stops after this many orders. Empty = no limit.</p>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", paddingTop: 26 }}>
+                    <Switch id="offer-once" checked={form.oncePerCustomer} onChange={(v) => set("oncePerCustomer", v)} />
+                    <label htmlFor="offer-once" style={{ fontSize: 14, cursor: "pointer" }}>
+                      Once per customer
+                    </label>
+                  </div>
+                </div>
+                <p style={{ ...hint, marginTop: 0 }}>The store checks these when the order is placed (by phone number and email).</p>
+              </div>
+            </Card>
+          )}
 
           <Card title="Schedule (IST)" icon={<CalendarClock size={17} />}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -388,20 +644,42 @@ export default function OfferForm({
               </div>
               <Switch id="offer-enabled" checked={form.enabled} onChange={(v) => set("enabled", v)} />
             </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div>
-                <label htmlFor="offer-combine" style={{ fontWeight: 600, cursor: "pointer" }}>
-                  Combine with other offers
-                </label>
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Off = when this applies, other {form.level === "cart" ? "cart" : "product"} offers don&apos;t.</div>
+            {lvl !== "gift" && lvl !== "shipping" && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div>
+                  <label htmlFor="offer-combine" style={{ fontWeight: 600, cursor: "pointer" }}>
+                    Combine with other offers
+                  </label>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Off = when this applies, other {isOrder ? "order" : "product"} offers don&apos;t.</div>
+                </div>
+                <Switch id="offer-combine" checked={form.combinable} onChange={(v) => set("combinable", v)} />
               </div>
-              <Switch id="offer-combine" checked={form.combinable} onChange={(v) => set("combinable", v)} />
-            </div>
+            )}
             <div>
               <label style={label}>Order</label>
-              <input className="input-field" type="number" min={0} max={999} step={1} value={form.sequence} onChange={(e) => set("sequence", e.target.value)} style={{ width: 90 }} />
+              {num("sequence", { min: 0, max: 999, width: 90 })}
               <p style={hint}>Lower runs first. Each offer applies to the price left by the one before.</p>
             </div>
+          </div>
+
+          <div className="card" style={{ padding: 18 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", padding: 12, background: "var(--bg-hover)", borderRadius: 10, marginBottom: 12 }}>
+              <div style={{ background: "#B33D14", color: "#fff", borderRadius: 8, padding: "8px 10px", textAlign: "center", minWidth: 64 }}>
+                <div style={{ fontWeight: 800, fontSize: 17, lineHeight: 1 }}>{chip.big}</div>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", marginTop: 3 }}>{chip.small}</div>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#B33D14", textTransform: "uppercase" }}>{form.badge || form.name || "Offer name"}</div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{form.title || form.name || "Headline"}</div>
+                {form.message && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{form.message}</div>}
+              </div>
+            </div>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Summary</h3>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7, color: "var(--text-secondary)" }}>
+              {summaryLines(draft, products).map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
           </div>
 
           <div className="card" style={{ padding: 18 }}>
@@ -409,52 +687,50 @@ export default function OfferForm({
               <Calculator size={16} style={{ color: "var(--text-muted)" }} />
               <h3 style={{ fontSize: 14, fontWeight: 600 }}>Price preview</h3>
             </div>
-            <div style={{ display: "flex", gap: 12, alignItems: "center", padding: 12, background: "var(--bg-hover)", borderRadius: 10, marginBottom: 12 }}>
-              <div style={{ background: "#B33D14", color: "#fff", borderRadius: 8, padding: "8px 10px", textAlign: "center", minWidth: 64 }}>
-                <div style={{ fontWeight: 800, fontSize: 17, lineHeight: 1 }}>{chip.big}</div>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", marginTop: 3 }}>{chip.small}</div>
+            {lvl === "product" ? (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: "1px solid var(--border)", marginBottom: 6 }}>
+                <span>{preview.sample.name}</span>
+                <span>
+                  {inr(preview.without.price)} → <b>{inr(preview.withIt.price)}</b>
+                </span>
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#B33D14", textTransform: "uppercase" }}>{form.name || "Offer name"}</div>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{form.title || form.name || "Headline"}</div>
-                {form.message && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{form.message}</div>}
-              </div>
-            </div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>
-              {preview.sample.name}, list price {inr(preview.sample.price)}
-            </div>
+            ) : null}
             <table style={{ width: "100%", fontSize: 13 }}>
               <thead>
                 <tr>
-                  <th style={{ padding: "6px 0", textAlign: "left" }}></th>
+                  <th style={{ padding: "6px 0", textAlign: "left" }}>Test cart</th>
                   <th style={{ padding: "6px 0", textAlign: "right" }}>Without</th>
                   <th style={{ padding: "6px 0", textAlign: "right" }}>With this</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style={{ padding: "6px 0" }}>Product price</td>
-                  <td style={{ padding: "6px 0", textAlign: "right" }}>{inr(preview.without.price)}</td>
-                  <td style={{ padding: "6px 0", textAlign: "right", fontWeight: 600 }}>{inr(preview.withIt.price)}</td>
-                </tr>
                 {preview.carts.map((c) => (
                   <tr key={c.qty}>
                     <td style={{ padding: "6px 0" }}>
-                      Cart of {c.qty}
+                      <div>{c.qty} {c.qty === 1 ? "bottle" : "bottles"}</div>
+                      {(c.gift || c.ship) && <div style={{ fontSize: 11, color: "var(--accent-emerald)" }}>{c.gift ? `+ free ${giftName || "gift"}` : "Free delivery"}</div>}
                     </td>
                     <td style={{ padding: "6px 0", textAlign: "right" }}>{inr(c.before)}</td>
-                    <td style={{ padding: "6px 0", textAlign: "right", fontWeight: 600, color: c.after < c.before ? "var(--accent-emerald)" : undefined }}>{inr(c.after)}</td>
+                    <td style={{ padding: "6px 0", textAlign: "right", fontWeight: 600, color: c.after < c.before || c.gift || c.ship ? "var(--accent-emerald)" : undefined }}>{inr(c.after)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <p style={{ ...hint, marginTop: 10 }}>
-              As if this offer were live now, together with {preview.othersLive.length ? preview.othersLive.map((o) => o.name).join(", ") : "no other offers"}.
+              Test carts use {preview.carts.length && preview.carts[preview.carts.length - 1].names.length > 1 ? "different bottles" : preview.sample.name}
+              {draft.couponCode ? `, with code ${draft.couponCode} entered` : ""}
+              {draft.eligibility === "first_order" ? ", as a first order" : ""}. Together with{" "}
+              {preview.othersLive.length ? preview.othersLive.map((o) => o.name).join(", ") : "no other offers"}.
             </p>
           </div>
 
           <div style={{ display: "grid", gap: 8 }}>
-            <button className="btn-primary" onClick={() => (isProd ? setConfirmLive(true) : doSave())} disabled={saving || deleting || (!dirty && !!offerId)} style={{ width: "100%", padding: "10px 14px" }}>
+            <button
+              className="btn-primary"
+              onClick={() => (isProd ? setConfirmLive(true) : doSave())}
+              disabled={saving || deleting || (!dirty && !!offerId)}
+              style={{ width: "100%", padding: "10px 14px" }}
+            >
               <Save size={15} /> {saving ? "Saving…" : offerId ? (dirty ? "Save changes" : "Saved") : "Create offer"}
             </button>
             {offerId && (

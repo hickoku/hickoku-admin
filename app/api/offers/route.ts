@@ -14,6 +14,7 @@ export async function GET() {
       products: products.map((p) => ({ id: p.id, name: p.name, image: p.images[0] || null, price: p.variants.find((v) => v.status)?.price ?? p.variants[0]?.price ?? 0 })),
       env: APP_ENV,
       table: OFFERS_TABLE,
+      // false until the storefront for this environment supports the new offer types
     });
   } catch (error: any) {
     console.error("Offers list error:", error);

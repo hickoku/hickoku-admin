@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listOffers, saveOffer, offerTypesLive } from "@/lib/offers";
+import { listOffers, saveOffer } from "@/lib/offers";
 import { listProducts } from "@/lib/products";
 import { OFFERS_TABLE } from "@/lib/aws";
 import { APP_ENV } from "@/lib/env";
@@ -15,7 +15,6 @@ export async function GET() {
       env: APP_ENV,
       table: OFFERS_TABLE,
       // false until the storefront for this environment supports the new offer types
-      typesLive: offerTypesLive(),
     });
   } catch (error: any) {
     console.error("Offers list error:", error);

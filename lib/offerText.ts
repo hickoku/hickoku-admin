@@ -12,14 +12,6 @@ export const OFFER_TYPES: { value: OfferLevel; label: string; sub: string }[] = 
 
 export const typeLabel = (l: OfferLevel) => OFFER_TYPES.find((t) => t.value === l)?.label || l;
 
-// True when the storefront needs its "offer types" release to apply this offer correctly.
-// Why: see the note above offerTypesLive in lib/offers.ts.
-export function needsStoreUpdate(o: Offer): boolean {
-  if (o.level === "product") return false;
-  if (o.level !== "cart") return true;
-  return !!o.couponCode || !!o.maxDiscount || (o.eligibility || "everyone") !== "everyone" || !!o.usageLimit || !!o.oncePerCustomer;
-}
-
 const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
 const names = (list: string[] | undefined, products: { id: string; name: string }[], all: string) =>
   list?.length ? products.filter((p) => list.includes(p.id)).map((p) => p.name).join(", ") || `${list.length} products` : all;

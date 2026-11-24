@@ -3,32 +3,13 @@
 // offers with the shared rules in lib/offerEngine.ts.
 import { GetCommand, PutCommand, DeleteCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { docClient, OFFERS_TABLE } from "@/lib/aws";
-import { envFor } from "@/lib/env";
 import { isLive, normaliseCode, type Offer, type OfferLevel } from "@/lib/offerEngine";
-import { needsStoreUpdate } from "@/lib/offerText";
-
-export { needsStoreUpdate };
 
 export type StoredOffer = Offer & { createdAt?: string; updatedAt?: string };
 export type OfferStatus = "live" | "scheduled" | "ended" | "used_up" | "off";
 
 type Result<T> = ({ success: true } & T) | { success: false; error: string; status: number };
 const fail = (error: string, status = 400) => ({ success: false as const, error, status });
-
-// ── Store support for the new offer types ─────────────────────────────────────
-// The storefront before its "offer types" release only understands automatic
-// product/cart offers. It skips rows whose level isn't product/cart and rows with a
-// coupon code, so Buy X get Y, free gifts, free shipping and codes are simply ignored
-// there. But it does NOT know about caps, eligibility or usage limits on a cart offer,
-// and would apply such an offer without them.
-//
-// So, until the storefront for this environment has the update, an offer that needs it
-// can be saved but not switched on. Set OFFER_TYPES_LIVE_STAGE=true / OFFER_TYPES_LIVE_PROD=true
-// on the admin once the storefront release is deployed to that environment.
-export const offerTypesLive = () => envFor("OFFER_TYPES_LIVE") === "true";
-
-const STORE_UPDATE_MSG =
-  "This offer uses features the store doesn't support yet. They arrive with the storefront update. You can save it now with the offer switched off, and turn it on after the update is live.";
 
 export function offerStatus(o: Offer, now = new Date()): OfferStatus {
   if (!o.enabled) return "off";
@@ -237,7 +218,6 @@ const newId = (name: string) =>
 export async function saveOffer(input: any, existingId?: string): Promise<Result<{ offer: StoredOffer }>> {
   const c = clean(input);
   if (!c.success) return c;
-  if (c.offer.enabled && needsStoreUpdate(c.offer) && !offerTypesLive()) return fail(STORE_UPDATE_MSG, 409);
 
   const all = await listOffers();
   if (c.offer.couponCode) {

@@ -10,10 +10,10 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { Switch } from "@/components/FormBits";
 import { fmtIst, type OfferProduct } from "@/components/offers/OfferForm";
 import { isLive, priceCart, priceProduct, type Offer, type OfferLevel } from "@/lib/offerEngine";
-import { describe, needsStoreUpdate, typeLabel } from "@/lib/offerText";
-import { Plus, RefreshCw, TicketPercent, Radio, Clock } from "lucide-react";
+import { describe, typeLabel } from "@/lib/offerText";
+import { Plus, RefreshCw, TicketPercent, Radio } from "lucide-react";
 
-type Data = { offers: Offer[]; products: OfferProduct[]; env: string; table: string; typesLive: boolean };
+type Data = { offers: Offer[]; products: OfferProduct[]; env: string; table: string };
 
 const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
 
@@ -124,15 +124,6 @@ function OffersInner() {
           <span>These are the live store&apos;s offers. Changes reach hickoku.com within about a minute.</span>
         </div>
       )}
-      {data && !data.typesLive && (
-        <div style={{ display: "flex", gap: 10, padding: "12px 14px", background: "var(--bg-hover)", border: "1px solid var(--border)", color: "var(--text-secondary)", borderRadius: 10, marginBottom: 16, fontSize: 13 }}>
-          <Clock size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>
-            New offer types (Buy X get Y, free gift, free delivery, discount codes, limits) can be set up now. They can be switched on once the storefront
-            update is live.
-          </span>
-        </div>
-      )}
       {loading && !data && <LoadingState message="Loading offers…" />}
       {error && <ErrorState message={error} onRetry={load} />}
 
@@ -172,11 +163,6 @@ function OffersInner() {
                                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                                   <span style={{ fontWeight: 600 }}>{o.name}</span>
                                   {o.couponCode && <span className="badge badge-neutral mono">{o.couponCode}</span>}
-                                  {!data.typesLive && needsStoreUpdate(o) && (
-                                    <span className="badge badge-warning" title="Can be switched on after the storefront update">
-                                      <Clock size={11} /> Waits for store update
-                                    </span>
-                                  )}
                                 </div>
                                 {sec.key !== "product" && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{typeLabel(o.level)}</div>}
                                 <div style={{ fontSize: 12, color: "var(--text-muted)", maxWidth: 260 }}>{o.title || o.message || "—"}</div>
@@ -204,7 +190,7 @@ function OffersInner() {
                                 <span className={`badge ${st.cls}`}>{st.label}</span>
                               </td>
                               <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
-                                <Switch id={`on-${o.id}`} checked={o.enabled} disabled={busyId === o.id || (!o.enabled && !data.typesLive && needsStoreUpdate(o))} onChange={() => (isProd ? setPendingToggle(o) : toggle(o))} />
+                                <Switch id={`on-${o.id}`} checked={o.enabled} disabled={busyId === o.id} onChange={() => (isProd ? setPendingToggle(o) : toggle(o))} />
                               </td>
                             </tr>
                           );

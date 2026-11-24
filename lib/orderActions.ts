@@ -22,7 +22,7 @@ const RETURN_STATE = process.env.DELHIVERY_RETURN_STATE || "";
 const RETURN_PIN = process.env.DELHIVERY_RETURN_PIN || "";
 const RETURN_PHONE = process.env.DELHIVERY_RETURN_PHONE || "";
 
-export const VALID_SOURCES = ["amazon", "influencer", "other"] as const;
+export const VALID_SOURCES = ["amazon", "influencer", "other", "club"] as const;
 export type OrderSource = (typeof VALID_SOURCES)[number];
 
 export type OrderItemInput = { productName: string; qty: number; unitPrice: number };
@@ -39,6 +39,9 @@ export type CreateManualOrderInput = {
   state: string;
   pin: string | number;
   items: OrderItemInput[];
+  // Value declared to Delhivery when it differs from the order total (a free Club gift is
+  // ₹0 to the customer but still worth its price in transit).
+  declaredValue?: number;
   // Extra fields merged onto the DynamoDB item as-is — lets callers (like the
   // future Amazon sync) attach their own linking fields (e.g. amazonOrderId,
   // amazonOrderItemIds for confirmShipment) without this function needing to
@@ -51,7 +54,7 @@ export type ActionResult<T> = { success: true } & T | { success: false; error: s
 export async function createManualOrder(
   input: CreateManualOrderInput,
 ): Promise<ActionResult<{ orderId: string; waybill: string; order: any }>> {
-  const { customOrderNumber, source, firstName, lastName, email, phone, address, city, state, pin, items, extra } = input;
+  const { customOrderNumber, source, firstName, lastName, email, phone, address, city, state, pin, items, extra, declaredValue } = input;
 
   if (!customOrderNumber || !firstName || !phone || !address || !city || !state || !pin || !items?.length) {
     return { success: false, error: "Missing required fields", status: 400 };
@@ -103,7 +106,7 @@ export async function createManualOrder(
         hsn_code: "",
         cod_amount: "0",
         order_date: new Date().toISOString(),
-        total_amount: String(totalAmount),
+        total_amount: String(declaredValue ?? totalAmount),
         seller_add: RETURN_ADD,
         seller_name: RETURN_NAME,
         seller_inv: customOrderNumber,
@@ -134,7 +137,7 @@ export async function createManualOrder(
   const delhiveryData = await delhiveryRes.json();
 
   if (delhiveryData.success === false) {
-    const errorMsg = delhiveryData.packages?.[0]?.remarks?.[0] || delhiveryData.error || "Failed to create shipment in Delhivery";
+    const errorMsg = delhiveryData.packages?.[0]?.remarks?.[0] || delhiveryData.rmk || (typeof delhiveryData.error === "string" ? delhiveryData.error : "") || "Failed to create shipment in Delhivery";
     return { success: false, error: errorMsg, status: 400 };
   }
 

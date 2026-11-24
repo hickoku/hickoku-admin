@@ -37,6 +37,8 @@ export const PRODUCT_WRITES_ENABLED = !IS_PROD;
 // Offers & discounts (Offers page). Editable on both envs: on prod this is how live
 // offers are changed. The storefront reads the same table by APP_ENV.
 export const OFFERS_TABLE = IS_PROD ? "offers" : "offers-stage";
+// Hickoku Club applications (written by the storefront's /club/apply, reviewed on Club → Applications).
+export const CLUB_TABLE = IS_PROD ? "club-applications" : "club-applications-stage";
 export const S3_BUCKET = process.env.S3_BUCKET_NAME || "";
 export const S3_REGION = process.env.AWS_REGION || "ap-south-1";
 

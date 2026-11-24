@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Package, Users, ImageIcon, LogOut, Plus, Settings, Tag, TicketPercent } from "lucide-react";
+import { LayoutDashboard, Package, Users, ImageIcon, LogOut, Plus, Settings, Tag, TicketPercent, PartyPopper } from "lucide-react";
 
 const NAV = [
   { label: "Home", href: "/", icon: LayoutDashboard },
@@ -15,7 +15,10 @@ const CONTENT_NAV = [
   { label: "Offers", href: "/offers", icon: TicketPercent },
   { label: "Hero banner", href: "/hero", icon: ImageIcon },
 ];
-const SETTINGS_NAV = [{ label: "Store details", href: "/settings", icon: Settings }];
+const SETTINGS_NAV = [
+  { label: "Store details", href: "/settings", icon: Settings },
+  { label: "Club settings", href: "/club/settings", icon: PartyPopper },
+];
 
 // Set in next.config.ts from APP_ENV (see lib/env.ts).
 const APP_ENV = process.env.NEXT_PUBLIC_APP_ENV === "prod" ? "prod" : "stage";

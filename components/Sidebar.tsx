@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, Package, Users, ImageIcon, LogOut, Plus, Settings, Tag, TicketPercent, PartyPopper, Inbox } from "lucide-react";
+import { LayoutDashboard, Package, Users, ImageIcon, LogOut, Plus, Settings, Tag, TicketPercent, PartyPopper, Inbox, Clapperboard } from "lucide-react";
 
 const NAV = [
   { label: "Home", href: "/", icon: LayoutDashboard },
@@ -17,6 +17,7 @@ const CONTENT_NAV = [
 ];
 const CLUB_NAV = [
   { label: "Applications", href: "/club/applications", icon: Inbox },
+  { label: "Posts & features", href: "/club/posts", icon: Clapperboard },
   { label: "Club settings", href: "/club/settings", icon: PartyPopper },
 ];
 const SETTINGS_NAV = [{ label: "Store details", href: "/settings", icon: Settings }];

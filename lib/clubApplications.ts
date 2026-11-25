@@ -40,6 +40,18 @@ export type ClubApplication = {
   rejectedAt?: string;
   rejectReason?: string;
   blocked?: boolean;
+  // After the party (release 6): sent from the storefront's status page, reviewed on Posts & features.
+  post?: {
+    state: "proof_sent" | "fix_requested" | "verified" | "not_posted";
+    reelUrl?: string;
+    postedFrom?: string;
+    storyShot?: boolean; // image kept in the PROOF#<id> row
+    featureConsent?: boolean;
+    submittedAt?: string;
+    fixNote?: string;
+    reviewedAt?: string;
+  };
+  featured?: { at: string; until: string; hidden?: boolean };
 };
 
 type Result<T> = ({ success: true } & T) | { success: false; error: string; status: number };
@@ -338,4 +350,115 @@ export async function unblockApplicant(id: string): Promise<Result<{ app: ClubAp
     new UpdateCommand({ TableName: CLUB_TABLE, Key: { pk: app.pk }, UpdateExpression: "REMOVE blocked", ReturnValues: "ALL_NEW" }),
   );
   return { success: true, app: r.Attributes as ClubApplication };
+}
+
+// ---------------- Posts & features (release 6) ----------------
+
+export type PostRow = ClubApplication & {
+  postStage: "waiting" | "due" | "proof" | "fix" | "verified" | "featured" | "not_posted";
+  daysLate: number; // days past the posting deadline (0 = not late yet)
+  overdue: boolean; // past "mark did not post after N days"
+};
+
+export async function listPosts(): Promise<{ posts: PostRow[]; settings: Awaited<ReturnType<typeof getClubSettings>>["settings"] }> {
+  const [items, { settings }] = await Promise.all([scanAll(), getClubSettings()]);
+  const today = todayIST();
+  const nowIso = new Date().toISOString();
+  const posts = (items.filter((i) => String(i.pk).startsWith("APP#") && i.status === "approved") as ClubApplication[]).map((a) => {
+    // Deadline: party day + the posting window (whole days, India time).
+    const deadline = new Date(`${a.partyDate}T00:00:00Z`);
+    deadline.setUTCDate(deadline.getUTCDate() + Math.ceil(settings.posting.postWithinHours / 24));
+    const late = Math.max(0, Math.floor((Date.parse(`${today}T00:00:00Z`) - deadline.getTime()) / 86_400_000) + 1);
+    const p = a.post?.state;
+    const postStage: PostRow["postStage"] =
+      a.featured && !a.featured.hidden && a.featured.until >= nowIso
+        ? "featured"
+        : p === "not_posted"
+          ? "not_posted"
+          : p === "verified"
+            ? "verified"
+            : p === "proof_sent"
+              ? "proof"
+              : p === "fix_requested"
+                ? "fix"
+                : today >= a.partyDate
+                  ? "due"
+                  : "waiting";
+    const waitingForThem = postStage === "due" || postStage === "fix";
+    return { ...a, postStage, daysLate: waitingForThem ? late : 0, overdue: waitingForThem && late >= settings.posting.markNotPostedAfterDays };
+  });
+  return { posts, settings };
+}
+
+async function setPost(app: ClubApplication, post: NonNullable<ClubApplication["post"]>, extra: { featured?: ClubApplication["featured"] | null } = {}) {
+  const sets = ["post = :p"];
+  const values: Record<string, any> = { ":p": post };
+  let remove = "";
+  if (extra.featured) {
+    sets.push("featured = :f");
+    values[":f"] = extra.featured;
+  } else if (extra.featured === null) remove = " REMOVE featured";
+  const r = await docClient.send(
+    new UpdateCommand({ TableName: CLUB_TABLE, Key: { pk: app.pk }, UpdateExpression: `SET ${sets.join(", ")}${remove}`, ExpressionAttributeValues: values, ReturnValues: "ALL_NEW" }),
+  );
+  return r.Attributes as ClubApplication;
+}
+
+/** Proof is good. With `feature`, it also goes on the wall for the Club's "feature for N days". */
+export async function verifyPost(id: string, feature: boolean): Promise<Result<{ app: ClubApplication }>> {
+  const app = await getApplication(id);
+  if (!app) return fail("Application not found", 404);
+  if (!app.post || (app.post.state !== "proof_sent" && app.post.state !== "verified")) return fail("There's no post to approve yet.", 409);
+  if (feature && app.post.featureConsent === false) return fail("They didn't agree to be featured.", 409);
+  const { settings } = await getClubSettings();
+  const now = new Date();
+  const until = new Date(now.getTime() + settings.programme.featureDays * 86_400_000).toISOString();
+  const updated = await setPost(app, { ...app.post, state: "verified", reviewedAt: now.toISOString(), fixNote: undefined }, feature ? { featured: { at: now.toISOString(), until } } : {});
+  return { success: true, app: updated };
+}
+
+/** Sends the post back with a note; their status page shows the note and the form again. */
+export async function requestFix(id: string, note: string): Promise<Result<{ app: ClubApplication }>> {
+  const app = await getApplication(id);
+  if (!app) return fail("Application not found", 404);
+  if (!app.post || app.post.state !== "proof_sent") return fail("There's no post waiting for review.", 409);
+  const fixNote = String(note || "").trim().slice(0, 300);
+  if (!fixNote) return fail("Say what needs fixing (they'll see it on their status page).");
+  return { success: true, app: await setPost(app, { ...app.post, state: "fix_requested", fixNote, reviewedAt: new Date().toISOString() }) };
+}
+
+/** They didn't post. Blocks them too when the Club setting "block automatically" is on. */
+export async function markNotPosted(id: string): Promise<Result<{ app: ClubApplication; blocked: boolean }>> {
+  const app = await getApplication(id);
+  if (!app) return fail("Application not found", 404);
+  if (app.status !== "approved") return fail("Only approved applications can be marked as not posted.", 409);
+  const { settings } = await getClubSettings();
+  let updated = await setPost(app, { ...(app.post || {}), state: "not_posted", reviewedAt: new Date().toISOString() }, { featured: null });
+  let blocked = false;
+  if (settings.posting.autoBlockNoPost) {
+    const b = await blockApplicant(id, `Did not post (${app.id})`);
+    if (b.success) {
+      updated = b.app;
+      blocked = true;
+    }
+  }
+  return { success: true, app: updated, blocked };
+}
+
+/** Take a featured post off (or put it back) without changing anything else. */
+export async function setFeatureHidden(id: string, hidden: boolean): Promise<Result<{ app: ClubApplication }>> {
+  const app = await getApplication(id);
+  if (!app) return fail("Application not found", 404);
+  if (!app.featured) return fail("This post isn't featured.", 409);
+  const r = await docClient.send(
+    new UpdateCommand({ TableName: CLUB_TABLE, Key: { pk: app.pk }, UpdateExpression: "SET featured.#h = :h", ExpressionAttributeNames: { "#h": "hidden" }, ExpressionAttributeValues: { ":h": hidden }, ReturnValues: "ALL_NEW" }),
+  );
+  return { success: true, app: r.Attributes as ClubApplication };
+}
+
+/** The Story screenshot the applicant uploaded (kept in the table, never public). */
+export async function getProofImage(id: string): Promise<{ type: string; data: Buffer } | null> {
+  const r = await docClient.send(new GetCommand({ TableName: CLUB_TABLE, Key: { pk: `PROOF#${id}` } }));
+  if (!r.Item?.data) return null;
+  return { type: String(r.Item.type || "image/jpeg"), data: Buffer.from(String(r.Item.data), "base64") };
 }

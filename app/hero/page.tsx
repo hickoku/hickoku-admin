@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import { LoadingState, ErrorState, EmptyState } from "@/components/States";
 import { UploadCloud, CheckCircle2, Trash2, Copy, ImageIcon, RefreshCw } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 type HeroImage = { key: string; url: string; size?: number; uploadedAt?: string };
 
@@ -23,7 +24,7 @@ export default function HeroPage() {
     setError(null);
     try {
       const res = await fetch("/api/hero");
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to load hero images");
       setImages(data.images || []);
       setActive(data.active || null);
@@ -46,7 +47,7 @@ export default function HeroPage() {
       form.append("file", file);
       form.append("setActive", String(setActiveOnUpload));
       const res = await fetch("/api/hero", { method: "POST", body: form });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Upload failed");
       await load();
     } catch (e: any) {
@@ -64,7 +65,7 @@ export default function HeroPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error);
       await load();
     } catch (e: any) {
@@ -76,7 +77,7 @@ export default function HeroPage() {
     if (!confirm("Delete this image permanently from S3?")) return;
     try {
       const res = await fetch(`/api/hero?key=${encodeURIComponent(key)}`, { method: "DELETE" });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error);
       await load();
     } catch (e: any) {

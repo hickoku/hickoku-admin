@@ -8,6 +8,7 @@ import { Card, Switch } from "@/components/FormBits";
 import { priceProduct, priceCart, offerChip, isLive, type Offer, type OfferLevel, type CartLine, type PricingContext } from "@/lib/offerEngine";
 import { OFFER_TYPES, summaryLines } from "@/lib/offerText";
 import { AlertCircle, Save, Trash2, Megaphone, Percent, CalendarClock, Calculator, Radio, Shapes, Ticket, Users, Gift, Truck, ListChecks } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 export type OfferProduct = { id: string; name: string; image: string | null; price: number };
 
@@ -312,7 +313,7 @@ export default function OfferForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Couldn't save");
       const saved = fromOffer(data.offer);
       setForm(saved);
@@ -331,7 +332,7 @@ export default function OfferForm({
     setDeleting(true);
     try {
       const res = await fetch(`/api/offers/${encodeURIComponent(offerId!)}`, { method: "DELETE" });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Couldn't delete");
       setBaseline(JSON.stringify(form));
       router.push("/offers?deleted=" + encodeURIComponent(form.name));

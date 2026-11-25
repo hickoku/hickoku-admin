@@ -8,6 +8,7 @@ import { useToast } from "@/components/Toast";
 import { fmtDate } from "@/components/OrderCard";
 import { imageSrc } from "@/components/products/ImageManager";
 import { ArrowLeft, Check, X, ExternalLink, Camera, ShieldCheck, Gift, MapPin, MessageCircle, Ban, Save, Package, ScrollText } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 const day = (ymd: string) => new Date(`${ymd}T00:00:00Z`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const label = { display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 6 } as const;
@@ -75,7 +76,7 @@ export default function ClubApplicationPage({ params }: { params: Promise<{ id: 
     setError(null);
     try {
       const res = await fetch(`/api/club/applications/${id}`);
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to load");
       setD(data);
       const r = data.app.review || {};
@@ -100,7 +101,7 @@ export default function ClubApplicationPage({ params }: { params: Promise<{ id: 
     setBusy("review");
     try {
       const res = await fetch(`/api/club/applications/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(review) });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error);
       setD((p: any) => ({ ...p, app: { ...p.app, ...data.app } }));
       setReviewDirty(false);
@@ -119,7 +120,7 @@ export default function ClubApplicationPage({ params }: { params: Promise<{ id: 
     setBusy(action);
     try {
       const res = await fetch(`/api/club/applications/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...extra }) });
-      const data = await res.json();
+      const data = await readJson(res);
       // Below the follower minimum or over the weekly cap: let the admin decide.
       if (action === "approve" && res.status === 422 && !extra.override) {
         setBusy(null);

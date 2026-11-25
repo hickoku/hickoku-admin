@@ -21,6 +21,7 @@ import {
 } from "@/components/OrderCard";
 import { deleteOrders, deleteWarnings } from "@/lib/deleteOrderClient";
 import { RefreshCw, Search, Plus, Trash2, ChevronRight, ChevronLeft, X, Package } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 const STATUS_TABS = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "failed"];
 const PAGE_SIZE = 25;
@@ -94,7 +95,7 @@ function OrdersPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, force }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) {
         if (data.delhiveryCancelFailed && !force) {
           setDialog({ kind: "cancelForce", order, reason: data.error });

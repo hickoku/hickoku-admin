@@ -6,6 +6,7 @@ import AdminLayout from "@/components/AdminLayout";
 import { LoadingState, ErrorState, EmptyState } from "@/components/States";
 import { getOrderBadge, getSourceBadge, fmt, fmtDate } from "@/components/OrderCard";
 import { Search, RefreshCw, User, Mail, Phone, MapPin, Package, ChevronDown, ChevronUp, ArrowUpDown } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 type SortKey = "recent" | "orders" | "spent";
 
@@ -22,7 +23,7 @@ export default function CustomersPage() {
     setError(null);
     try {
       const res = await fetch("/api/customers");
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to load customers");
       setCustomers(data.customers || []);
     } catch (e: any) {

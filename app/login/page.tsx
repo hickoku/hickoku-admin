@@ -3,6 +3,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, Sparkles } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 function LoginForm() {
   const router = useRouter();
@@ -21,7 +22,7 @@ function LoginForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Login failed");
       router.replace(params.get("next") || "/");
       router.refresh();

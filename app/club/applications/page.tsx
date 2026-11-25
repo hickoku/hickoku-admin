@@ -6,6 +6,7 @@ import AdminLayout from "@/components/AdminLayout";
 import { LoadingState, ErrorState, EmptyState } from "@/components/States";
 import { RefreshCw, Settings, AlertTriangle, Search } from "lucide-react";
 import { imageSrc } from "@/components/products/ImageManager";
+import { readJson } from "@/lib/readJson";
 
 type Row = {
   id: string;
@@ -60,7 +61,7 @@ export default function ClubApplicationsPage() {
     setError(null);
     try {
       const res = await fetch("/api/club/applications");
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to load applications");
       setRows(data.applications);
       setMeta({ approvedThisWeek: data.approvedThisWeek, weeklyCap: data.weeklyCap, minFollowers: data.minFollowers, env: data.env, table: data.table });

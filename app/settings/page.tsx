@@ -6,6 +6,7 @@ import { LoadingState, ErrorState } from "@/components/States";
 import { useToast } from "@/components/Toast";
 import { fmtDate } from "@/components/OrderCard";
 import { Building2, Receipt, Landmark, Eye, Save, FileText, Info } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 type Toggles = Record<string, { label: string; group: string }>;
 
@@ -86,7 +87,7 @@ export default function SettingsPage() {
     setError(null);
     try {
       const res = await fetch("/api/settings");
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to load settings");
       setSettings(data.settings);
       setMeta({ saved: data.saved, env: data.env, table: data.table, toggles: data.toggles });
@@ -119,7 +120,7 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       const res = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to save");
       setSettings(data.settings);
       setMeta((m) => (m ? { ...m, saved: true } : m));

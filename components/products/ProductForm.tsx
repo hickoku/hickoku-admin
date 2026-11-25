@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import ImageManager, { imageSrc } from "./ImageManager";
 import { Plus, Trash2, Save, AlertCircle, Package, Images, Layers, Eye, Lock, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, Switch } from "@/components/FormBits";
+import { readJson } from "@/lib/readJson";
 
 export type VariantForm = {
   id?: string;
@@ -135,7 +136,7 @@ export default function ProductForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Couldn't save");
       const saved = fromProduct(data.product);
       setForm(saved);
@@ -154,7 +155,7 @@ export default function ProductForm({
     setDeleting(true);
     try {
       const res = await fetch(`/api/products/${productId}`, { method: "DELETE" });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Couldn't delete");
       setBaseline(JSON.stringify(form));
       router.push("/products?deleted=" + encodeURIComponent(form.name));

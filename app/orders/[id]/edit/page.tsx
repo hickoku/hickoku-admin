@@ -8,6 +8,7 @@ import { fmt, fmtDate, getOrderBadge, getPaymentBadge, SOURCE_LABELS } from "@/c
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { deleteOrders, deleteWarnings } from "@/lib/deleteOrderClient";
 import { User, MapPin, Package, AlertCircle, Plus, Trash2, Tag, History, Save } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 const ORDER_STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "failed"];
 const PAYMENT_STATUSES = ["pending", "paid", "failed", "refunded"];
@@ -107,7 +108,7 @@ export default function EditOrderPage() {
     setLoadError(null);
     try {
       const res = await fetch(`/api/orders/${encodeURIComponent(id)}`);
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to load order");
       setOrder(data.order);
       fillFrom(data.order);
@@ -148,7 +149,7 @@ export default function EditOrderPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to save order");
       setOrder(data.order);
       fillFrom(data.order);

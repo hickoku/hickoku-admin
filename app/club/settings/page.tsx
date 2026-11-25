@@ -7,6 +7,7 @@ import { useToast } from "@/components/Toast";
 import { fmtDate } from "@/components/OrderCard";
 import { imageSrc } from "@/components/products/ImageManager";
 import { PartyPopper, UserCheck, CalendarHeart, ScrollText, Gift, Camera, Sparkles, Save, Undo2, ArrowUp, ArrowDown, Trash2, Plus, Check, Info, X } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 type Product = { id: string; name: string; image: string | null };
 type Terms = { version: number; body: string; publishedAt: string } | null;
@@ -98,7 +99,7 @@ export default function ClubSettingsPage() {
     setError(null);
     try {
       const res = await fetch("/api/club/settings");
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to load Club settings");
       setS(data.settings);
       setSaved(data.settings);
@@ -173,7 +174,7 @@ export default function ClubSettingsPage() {
     setSaving(true);
     try {
       const res = await fetch("/api/club/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to save");
       setS(data.settings);
       setSaved(data.settings);
@@ -192,7 +193,7 @@ export default function ClubSettingsPage() {
     setPublishing(true);
     try {
       const res = await fetch("/api/club/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body: draft }) });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to publish");
       setTerms(data.terms);
       setDraft(data.terms.body);

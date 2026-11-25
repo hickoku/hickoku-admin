@@ -20,6 +20,7 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { readJson } from "@/lib/readJson";
 
 const PIE_COLORS = ["var(--accent-gold)", "var(--accent-blue)", "var(--accent-emerald)", "var(--accent-rose)", "var(--accent-red)"];
 
@@ -54,7 +55,7 @@ export default function DashboardPage() {
     setError(null);
     try {
       const res = await fetch("/api/dashboard");
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to load dashboard");
       setStats(data.stats);
       setLastUpdated(new Date());

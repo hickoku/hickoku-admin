@@ -7,6 +7,7 @@ import { LoadingState, ErrorState, EmptyState } from "@/components/States";
 import { useToast } from "@/components/Toast";
 import { fmtDate } from "@/components/OrderCard";
 import { RefreshCw, ExternalLink, Image as ImageIcon, MessageCircle, Sparkles, Check, X, EyeOff, Eye, Ban } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 type Post = {
   id: string;
@@ -55,7 +56,7 @@ export default function ClubPostsPage() {
     setError(null);
     try {
       const res = await fetch("/api/club/posts");
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to load");
       setPosts(data.posts);
       setRules(data.rules);
@@ -73,7 +74,7 @@ export default function ClubPostsPage() {
     setBusy(`${id}:${action}`);
     try {
       const res = await fetch(`/api/club/posts/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, ...extra }) });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error);
       showToast(done || "Saved");
       setFixFor(null);

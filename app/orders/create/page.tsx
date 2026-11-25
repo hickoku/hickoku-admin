@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminLayout from "@/components/AdminLayout";
 import { User, MapPin, Package, AlertCircle, Plus, Trash2, Tag } from "lucide-react";
+import { readJson } from "@/lib/readJson";
 
 const SOURCES = [
   { value: "amazon", label: "Amazon" },
@@ -60,7 +61,7 @@ export default function CreateManualOrderPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, items }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!data.success) throw new Error(data.error || "Failed to create order");
       router.push("/orders");
     } catch (err: any) {

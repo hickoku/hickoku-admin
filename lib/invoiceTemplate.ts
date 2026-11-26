@@ -56,8 +56,10 @@ export function renderInvoiceHTML(inv: InvoiceData): string {
   }
   if (sh.waivedFees) {
     if (inv.fees.handling) totalRows.push({ label: "Handling fee", value: money(inv.fees.handling), kind: "free" });
-    if (inv.fees.delivery) totalRows.push({ label: "Delivery fee", value: money(inv.fees.delivery), kind: "free" });
+    if (inv.fees.delivery && !inv.deliveryCharged) totalRows.push({ label: "Delivery fee", value: money(inv.fees.delivery), kind: "free" });
   }
+  // A delivery fee the customer paid is always shown (it is part of the total)
+  if (inv.deliveryCharged) totalRows.push({ label: "Delivery fee", value: money(inv.deliveryCharged) });
   const freeHtml = (v: string) => `<s style="color:#9ca3af;margin-right:4px">${v}</s> <strong style="color:#2e9e5b">FREE</strong>`;
 
   return `<!DOCTYPE html>

@@ -5,6 +5,7 @@ import AdminLayout from "@/components/AdminLayout";
 import { LoadingState, ErrorState } from "@/components/States";
 import { useToast } from "@/components/Toast";
 import { fmtDate } from "@/components/OrderCard";
+import CheckoutSwitchesCard from "@/components/CheckoutSwitchesCard";
 import { Building2, Receipt, Landmark, Eye, Save, FileText, Info } from "lucide-react";
 import { readJson } from "@/lib/readJson";
 
@@ -147,7 +148,7 @@ export default function SettingsPage() {
   return (
     <AdminLayout
       title="Store details"
-      subtitle="Your business details and what appears on invoices"
+      subtitle="Checkout switches, your business details and what appears on invoices"
       action={
         settings && (
           <>
@@ -178,6 +179,7 @@ export default function SettingsPage() {
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 16, alignItems: "start" }}>
             <div>
+              <CheckoutSwitchesCard isProd={meta.env === "prod"} onToast={showToast} />
               <Section icon={<Building2 size={18} />} title="Business" description="The legal entity shown as the seller on every invoice.">
                 <div style={{ display: "grid", gap: 14 }}>
                   <Input title="Business name *" value={seller.name} onChange={setSeller("name")} />

@@ -159,7 +159,8 @@ export function OrderDetails({
   const cartOffers = applied.filter((x) => x.level === "cart");
   if (cartOffers.length) for (const a of cartOffers) totals.push([a.name, `− ${fmt(a.amount)}`]);
   else if (order.surpriseDiscount) totals.push(["Discount", `− ${fmt(order.surpriseDiscount)}`]);
-  if (typeof order.shippingCost === "number") totals.push(["Shipping", fmt(order.shippingCost)]);
+  if (typeof order.shippingCost === "number")
+    totals.push(["Shipping", order.shippingCharged ? `${fmt(order.shippingCost)} (charged)` : `${fmt(order.shippingCost)} (shown as FREE)`]);
   totals.push(["Total", <strong key="t">{fmt(getOrderAmountRupees(order))}</strong>]);
 
   const orderRows: Row[] = [

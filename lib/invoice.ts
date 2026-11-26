@@ -73,6 +73,8 @@ export type InvoiceData = {
   amountInWords: string;
   gst: GstBreakdown;
   fees: { handling: number; delivery: number };
+  // Delivery fee the customer actually paid (storefront "Charge shipping" on); null = delivery was free
+  deliveryCharged: number | null;
   payment: { method: string; status: string; id: string; via: string };
   awb: string | null;
 };
@@ -157,6 +159,7 @@ export async function getInvoiceData(orderId: string): Promise<InvoiceData | nul
   }
 
   const total = typeof order.total === "number" ? order.total : items.reduce((sum, i) => sum + i.total, 0);
+  const deliveryCharged = order.shippingCharged === true && Number(order.shippingCost) > 0 ? Number(order.shippingCost) : null;
   const inv = settings.invoice;
   return {
     invoiceNo,
@@ -174,7 +177,9 @@ export async function getInvoiceData(orderId: string): Promise<InvoiceData | nul
     tax: typeof order.tax === "number" ? order.tax : null,
     total,
     amountInWords: toWords(total),
-    gst: computeGst(total, inv.gstRate, settings.seller.state, buyer.state),
+    // GST is on the items only; a charged delivery fee is its own line
+    gst: computeGst(deliveryCharged ? Math.max(0, total - deliveryCharged) : total, inv.gstRate, settings.seller.state, buyer.state),
+    deliveryCharged,
     fees: {
       handling: inv.handlingFee,
       delivery: typeof order.shippingCost === "number" && order.shippingCost > 0 ? order.shippingCost : inv.deliveryFee,
@@ -210,6 +215,7 @@ export async function getPreviewInvoice(override?: StoreSettings): Promise<Invoi
     amountInWords: toWords(1298),
     gst: computeGst(1298, settings.invoice.gstRate, settings.seller.state, "Maharashtra"),
     fees: { handling: settings.invoice.handlingFee, delivery: settings.invoice.deliveryFee },
+    deliveryCharged: null,
     payment: { method: "upi", status: "captured", id: "pay_SAMPLE123", via: "Razorpay" },
     awb: "1234567890123",
   };
